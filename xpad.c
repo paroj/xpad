@@ -80,6 +80,7 @@
 #include <linux/stat.h>
 #include <linux/module.h>
 #include <linux/usb/input.h>
+#include <linux/spinlock.h>
 
 #define DRIVER_AUTHOR "Marko Friedemann <mfr@bmx-chemnitz.de>"
 #define DRIVER_DESC "X-Box pad driver"
@@ -331,7 +332,15 @@ struct usb_xpad {
 	struct urb *irq_out;		/* urb for interrupt out report */
 	unsigned char *odata;		/* output data */
 	dma_addr_t odata_dma;
-	struct mutex odata_mutex;
+	int odata_busy;
+
+	spinlock_t pend_lock;
+
+	unsigned pend_rum;
+	unsigned char rum_data[XPAD_PKT_LEN];
+
+	unsigned pend_led;
+	unsigned char led_data[XPAD_PKT_LEN];
 
 #if defined(CONFIG_JOYSTICK_XPAD_LEDS)
 	struct xpad_led *led;
@@ -669,12 +678,37 @@ static void xpad_irq_out(struct urb *urb)
 	struct usb_xpad *xpad = urb->context;
 	struct device *dev = &xpad->intf->dev;
 	int retval, status;
+	unsigned long flags;
 
 	status = urb->status;
 
 	switch (status) {
 	case 0:
 		/* success */
+		spin_lock_irqsave(&xpad->pend_lock, flags);
+		xpad->irq_out->transfer_buffer_length = 0;
+
+		if (xpad->pend_rum != 0) {
+			memcpy(xpad->odata, xpad->rum_data, xpad->pend_rum);
+			xpad->irq_out->transfer_buffer_length = xpad->pend_rum;
+			xpad->pend_rum = 0;
+		} else if (xpad->pend_led != 0) {
+			memcpy(xpad->odata, xpad->led_data, xpad->pend_led);
+			xpad->irq_out->transfer_buffer_length = xpad->pend_led;
+			xpad->pend_led = 0;
+		}
+
+		if (xpad->irq_out->transfer_buffer_length != 0) {
+			spin_unlock_irqrestore(&xpad->pend_lock, flags);
+			if (usb_submit_urb(xpad->irq_out, GFP_ATOMIC) != 0) {
+				spin_lock_irqsave(&xpad->pend_lock, flags);
+				xpad->odata_busy = 0;
+				spin_unlock_irqrestore(&xpad->pend_lock, flags);
+			}
+		} else {
+			xpad->odata_busy = 0;
+			spin_unlock_irqrestore(&xpad->pend_lock, flags);
+		}
 		return;
 
 	case -ECONNRESET:
@@ -683,19 +717,27 @@ static void xpad_irq_out(struct urb *urb)
 		/* this urb is terminated, clean up */
 		dev_dbg(dev, "%s - urb shutting down with status: %d\n",
 			__func__, status);
+
+		spin_lock_irqsave(&xpad->pend_lock, flags);
+		xpad->odata_busy = 0;
+		spin_unlock_irqrestore(&xpad->pend_lock, flags);
 		return;
 
 	default:
 		dev_dbg(dev, "%s - nonzero urb status received: %d\n",
 			__func__, status);
-		goto exit;
-	}
 
-exit:
-	retval = usb_submit_urb(urb, GFP_ATOMIC);
-	if (retval)
-		dev_err(dev, "%s - usb_submit_urb failed with result %d\n",
-			__func__, retval);
+		retval = usb_submit_urb(urb, GFP_ATOMIC);
+		if (retval) {
+			dev_err(dev, "%s - usb_submit_urb failed with result %d\n",
+				__func__, retval);
+			spin_lock_irqsave(&xpad->pend_lock, flags);
+			xpad->odata_busy = 0;
+			spin_unlock_irqrestore(&xpad->pend_lock, flags);
+		}
+
+		return;
+	}
 }
 
 static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
@@ -714,7 +756,12 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 		goto fail1;
 	}
 
-	mutex_init(&xpad->odata_mutex);
+	xpad->odata_busy = 0;
+
+	spin_lock_init(&xpad->pend_lock);
+
+	xpad->pend_rum = 0;
+	xpad->pend_led = 0;
 
 	xpad->irq_out = usb_alloc_urb(0, GFP_KERNEL);
 	if (!xpad->irq_out) {
@@ -755,75 +802,101 @@ static void xpad_deinit_output(struct usb_xpad *xpad)
 }
 
 #ifdef CONFIG_JOYSTICK_XPAD_FF
+static int xpad_make_rum_data(struct usb_xpad *xpad, __u16 strong, __u16 weak)
+{
+	switch (xpad->xtype) {
+
+	case XTYPE_XBOX:
+		xpad->rum_data[0] = 0x00;
+		xpad->rum_data[1] = 0x06;
+		xpad->rum_data[2] = 0x00;
+		xpad->rum_data[3] = strong / 256;	/* left actuator */
+		xpad->rum_data[4] = 0x00;
+		xpad->rum_data[5] = weak / 256;	/* right actuator */
+		xpad->pend_rum = 6;
+		return 0;
+
+	case XTYPE_XBOX360:
+		xpad->rum_data[0] = 0x00;
+		xpad->rum_data[1] = 0x08;
+		xpad->rum_data[2] = 0x00;
+		xpad->rum_data[3] = strong / 256;  /* left actuator? */
+		xpad->rum_data[4] = weak / 256;	/* right actuator? */
+		xpad->rum_data[5] = 0x00;
+		xpad->rum_data[6] = 0x00;
+		xpad->rum_data[7] = 0x00;
+		xpad->pend_rum = 8;
+		return 0;
+
+	case XTYPE_XBOX360W:
+		xpad->rum_data[0] = 0x00;
+		xpad->rum_data[1] = 0x01;
+		xpad->rum_data[2] = 0x0F;
+		xpad->rum_data[3] = 0xC0;
+		xpad->rum_data[4] = 0x00;
+		xpad->rum_data[5] = strong / 256;
+		xpad->rum_data[6] = weak / 256;
+		xpad->rum_data[7] = 0x00;
+		xpad->rum_data[8] = 0x00;
+		xpad->rum_data[9] = 0x00;
+		xpad->rum_data[10] = 0x00;
+		xpad->rum_data[11] = 0x00;
+		xpad->pend_rum = 12;
+		return 0;
+		
+	case XTYPE_XBOXONE:
+		xpad->rum_data[0] = 0x09; /* activate rumble */
+		xpad->rum_data[1] = 0x08;
+		xpad->rum_data[2] = 0x00;
+		xpad->rum_data[3] = 0x08; /* continuous effect */
+		xpad->rum_data[4] = 0x00; /* simple rumble mode */
+		xpad->rum_data[5] = 0x03; /* L and R actuator only */
+		xpad->rum_data[6] = 0x00; /* TODO: LT actuator */
+		xpad->rum_data[7] = 0x00; /* TODO: RT actuator */
+		xpad->rum_data[8] = strong / 256;	/* left actuator */
+		xpad->rum_data[9] = weak / 256;	/* right actuator */
+		xpad->rum_data[10] = 0x80;	/* length of pulse */
+		xpad->rum_data[11] = 0x00;	/* stop period of pulse */
+		xpad->pend_rum = 12;
+		return 0;
+	}
+	return -1;
+}
+
 static int xpad_play_effect(struct input_dev *dev, void *data, struct ff_effect *effect)
 {
 	struct usb_xpad *xpad = input_get_drvdata(dev);
 
 	if (effect->type == FF_RUMBLE) {
-		__u16 strong = effect->u.rumble.strong_magnitude;
-		__u16 weak = effect->u.rumble.weak_magnitude;
+		unsigned long flags;
+		int mrdrv;
 
-		switch (xpad->xtype) {
+		spin_lock_irqsave(&xpad->pend_lock, flags);
+		mrdrv = xpad_make_rum_data(xpad, effect->u.rumble.strong_magnitude,
+						effect->u.rumble.weak_magnitude);
 
-		case XTYPE_XBOX:
-			xpad->odata[0] = 0x00;
-			xpad->odata[1] = 0x06;
-			xpad->odata[2] = 0x00;
-			xpad->odata[3] = strong / 256;	/* left actuator */
-			xpad->odata[4] = 0x00;
-			xpad->odata[5] = weak / 256;	/* right actuator */
-			xpad->irq_out->transfer_buffer_length = 6;
+		if (mrdrv == 0 && !xpad->odata_busy) {
+			memcpy(xpad->odata, xpad->rum_data, xpad->pend_rum);
+			xpad->irq_out->transfer_buffer_length = xpad->pend_rum;
+			xpad->pend_rum = 0;
+			xpad->odata_busy = 1;
+			spin_unlock_irqrestore(&xpad->pend_lock, flags);
 
-			return usb_submit_urb(xpad->irq_out, GFP_ATOMIC);
+			if (usb_submit_urb(xpad->irq_out, GFP_ATOMIC) != 0) {
+				spin_lock_irqsave(&xpad->pend_lock, flags);
+				xpad->odata_busy = 0;
+				spin_unlock_irqrestore(&xpad->pend_lock, flags);
+			}
+		} else {
+			spin_unlock_irqrestore(&xpad->pend_lock, flags);
 
-		case XTYPE_XBOX360:
-			xpad->odata[0] = 0x00;
-			xpad->odata[1] = 0x08;
-			xpad->odata[2] = 0x00;
-			xpad->odata[3] = strong / 256;  /* left actuator? */
-			xpad->odata[4] = weak / 256;	/* right actuator? */
-			xpad->odata[5] = 0x00;
-			xpad->odata[6] = 0x00;
-			xpad->odata[7] = 0x00;
-			xpad->irq_out->transfer_buffer_length = 8;
+			if (mrdrv == 0) {
+				dev_dbg(&xpad->dev->dev,
+					"%s - rumble while urb busy\n", __func__);
+			}
+		}
 
-			return usb_submit_urb(xpad->irq_out, GFP_ATOMIC);
-
-		case XTYPE_XBOX360W:
-			xpad->odata[0] = 0x00;
-			xpad->odata[1] = 0x01;
-			xpad->odata[2] = 0x0F;
-			xpad->odata[3] = 0xC0;
-			xpad->odata[4] = 0x00;
-			xpad->odata[5] = strong / 256;
-			xpad->odata[6] = weak / 256;
-			xpad->odata[7] = 0x00;
-			xpad->odata[8] = 0x00;
-			xpad->odata[9] = 0x00;
-			xpad->odata[10] = 0x00;
-			xpad->odata[11] = 0x00;
-			xpad->irq_out->transfer_buffer_length = 12;
-
-			return usb_submit_urb(xpad->irq_out, GFP_ATOMIC);
-
-		case XTYPE_XBOXONE:
-			xpad->odata[0] = 0x09; /* activate rumble */
-			xpad->odata[1] = 0x08;
-			xpad->odata[2] = 0x00;
-			xpad->odata[3] = 0x08; /* continuous effect */
-			xpad->odata[4] = 0x00; /* simple rumble mode */
-			xpad->odata[5] = 0x03; /* L and R actuator only */
-			xpad->odata[6] = 0x00; /* TODO: LT actuator */
-			xpad->odata[7] = 0x00; /* TODO: RT actuator */
-			xpad->odata[8] = strong / 256;	/* left actuator */
-			xpad->odata[9] = weak / 256;	/* right actuator */
-			xpad->odata[10] = 0x80;	/* length of pulse */
-			xpad->odata[11] = 0x00;	/* stop period of pulse */
-			xpad->irq_out->transfer_buffer_length = 12;
-
-			return usb_submit_urb(xpad->irq_out, GFP_ATOMIC);
-
-		default:
+		if (mrdrv != 0) {
 			dev_dbg(&xpad->dev->dev,
 				"%s - rumble command sent to unsupported xpad type: %d\n",
 				__func__, xpad->xtype);
@@ -879,36 +952,51 @@ struct xpad_led {
  */
 static void xpad_send_led_command(struct usb_xpad *xpad, int command)
 {
-	command %= 16;
+	unsigned long flags;
+	spin_lock_irqsave(&xpad->pend_lock, flags);
 
-	mutex_lock(&xpad->odata_mutex);
+	command %= 16;
 
 	switch (xpad->xtype) {
 	case XTYPE_XBOX360:
-		xpad->odata[0] = 0x01;
-		xpad->odata[1] = 0x03;
-		xpad->odata[2] = command;
-		xpad->irq_out->transfer_buffer_length = 3;
+		xpad->led_data[0] = 0x01;
+		xpad->led_data[1] = 0x03;
+		xpad->led_data[2] = command;
+		xpad->pend_led = 3;
 		break;
 	case XTYPE_XBOX360W:
-		xpad->odata[0] = 0x00;
-		xpad->odata[1] = 0x00;
-		xpad->odata[2] = 0x08;
-		xpad->odata[3] = 0x40 + command;
-		xpad->odata[4] = 0x00;
-		xpad->odata[5] = 0x00;
-		xpad->odata[6] = 0x00;
-		xpad->odata[7] = 0x00;
-		xpad->odata[8] = 0x00;
-		xpad->odata[9] = 0x00;
-		xpad->odata[10] = 0x00;
-		xpad->odata[11] = 0x00;
-		xpad->irq_out->transfer_buffer_length = 12;
+		xpad->led_data[0] = 0x00;
+		xpad->led_data[1] = 0x00;
+		xpad->led_data[2] = 0x08;
+		xpad->led_data[3] = 0x40 + command;
+		xpad->led_data[4] = 0x00;
+		xpad->led_data[5] = 0x00;
+		xpad->led_data[6] = 0x00;
+		xpad->led_data[7] = 0x00;
+		xpad->led_data[8] = 0x00;
+		xpad->led_data[9] = 0x00;
+		xpad->led_data[10] = 0x00;
+		xpad->led_data[11] = 0x00;
+		xpad->pend_led = 12;
 		break;
 	}
 
-	usb_submit_urb(xpad->irq_out, GFP_KERNEL);
-	mutex_unlock(&xpad->odata_mutex);
+	if (!xpad->odata_busy) {
+		memcpy(xpad->odata, xpad->led_data, xpad->pend_led);
+		xpad->irq_out->transfer_buffer_length = xpad->pend_led;
+		xpad->pend_led = 0;
+		xpad->odata_busy = 1;
+		spin_unlock_irqrestore(&xpad->pend_lock, flags);
+
+		if (usb_submit_urb(xpad->irq_out, GFP_KERNEL) != 0) {
+			spin_lock_irqsave(&xpad->pend_lock, flags);
+			xpad->odata_busy = 0;
+			spin_unlock_irqrestore(&xpad->pend_lock, flags);
+		}
+	} else {
+		spin_unlock_irqrestore(&xpad->pend_lock, flags);
+		dev_dbg(&xpad->dev->dev, "%s - led while urb busy\n", __func__);
+	}
 }
 
 /*
