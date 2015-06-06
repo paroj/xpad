@@ -351,6 +351,7 @@ struct usb_xpad {
 	int pad_nr;			/* the order x360 pads were attached */
 	const char *name;		/* name of the device */
 	struct work_struct work;	/* init/remove device from callback */
+	unsigned char odata_serial; /* serial number for xbox one protocol */
 };
 
 static int xpad_init_input(struct usb_xpad *xpad);
@@ -917,17 +918,18 @@ static int xpad_play_effect(struct input_dev *dev, void *data, struct ff_effect 
 	case XTYPE_XBOXONE:
 		xpad->odata[0] = 0x09; /* activate rumble */
 		xpad->odata[1] = 0x08;
-		xpad->odata[2] = 0x00;
+		xpad->odata[2] = xpad->odata_serial++;
 		xpad->odata[3] = 0x08; /* continuous effect */
 		xpad->odata[4] = 0x00; /* simple rumble mode */
 		xpad->odata[5] = 0x03; /* L and R actuator only */
 		xpad->odata[6] = 0x00; /* TODO: LT actuator */
 		xpad->odata[7] = 0x00; /* TODO: RT actuator */
-		xpad->odata[8] = strong / 256;	/* left actuator */
-		xpad->odata[9] = weak / 256;	/* right actuator */
+		xpad->odata[8] = strong / 512;	/* left actuator */
+		xpad->odata[9] = weak / 512;	/* right actuator */
 		xpad->odata[10] = 0x80;	/* length of pulse */
 		xpad->odata[11] = 0x00;	/* stop period of pulse */
-		xpad->irq_out->transfer_buffer_length = 12;
+		xpad->odata[12] = 0x00;
+		xpad->irq_out->transfer_buffer_length = 13;
 		break;
 
 	default:
@@ -1150,7 +1152,10 @@ static int xpad_open(struct input_dev *dev)
 		/* Xbox one controller needs to be initialized. */
 		xpad->odata[0] = 0x05;
 		xpad->odata[1] = 0x20;
-		xpad->irq_out->transfer_buffer_length = 2;
+		xpad->odata[2] = xpad->odata_serial++; /* packet serial */
+		xpad->odata[3] = 0x01; /* rumble bit enable?  */
+		xpad->odata[4] = 0x00;
+		xpad->irq_out->transfer_buffer_length = 5;
 		retval = usb_submit_urb(xpad->irq_out, GFP_KERNEL);
 		spin_unlock_irqrestore(&xpad->odata_lock, flags);
 		return retval;
