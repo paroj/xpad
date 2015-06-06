@@ -336,6 +336,8 @@ struct usb_xpad {
 
 	spinlock_t pend_lock;
 
+	unsigned char odata_serial; /* serial number for xbox one protocol */
+
 	unsigned pend_rum;
 	unsigned char rum_data[XPAD_PKT_LEN];
 
@@ -847,17 +849,18 @@ static int xpad_make_rum_data(struct usb_xpad *xpad, __u16 strong, __u16 weak)
 	case XTYPE_XBOXONE:
 		xpad->rum_data[0] = 0x09; /* activate rumble */
 		xpad->rum_data[1] = 0x08;
-		xpad->rum_data[2] = 0x00;
+		xpad->rum_data[2] = xpad->odata_serial++;
 		xpad->rum_data[3] = 0x08; /* continuous effect */
 		xpad->rum_data[4] = 0x00; /* simple rumble mode */
 		xpad->rum_data[5] = 0x03; /* L and R actuator only */
 		xpad->rum_data[6] = 0x00; /* TODO: LT actuator */
 		xpad->rum_data[7] = 0x00; /* TODO: RT actuator */
-		xpad->rum_data[8] = strong / 256;	/* left actuator */
-		xpad->rum_data[9] = weak / 256;	/* right actuator */
+		xpad->rum_data[8] = strong / 512;	/* left actuator */
+		xpad->rum_data[9] = weak / 512;	/* right actuator */
 		xpad->rum_data[10] = 0x80;	/* length of pulse */
 		xpad->rum_data[11] = 0x00;	/* stop period of pulse */
-		xpad->pend_rum = 12;
+		xpad->rum_data[12] = 0x00;
+		xpad->pend_rum = 13;
 		return 0;
 	}
 	return -1;
@@ -1080,10 +1083,14 @@ static int xpad_open(struct input_dev *dev)
 		return -EIO;
 
 	if (xpad->xtype == XTYPE_XBOXONE) {
+		xpad->odata_serial = 0;
 		/* Xbox one controller needs to be initialized. */
 		xpad->odata[0] = 0x05;
 		xpad->odata[1] = 0x20;
-		xpad->irq_out->transfer_buffer_length = 2;
+		xpad->odata[2] = xpad->odata_serial++; /* packet serial */
+		xpad->odata[3] = 0x01; /* rumble bit enable?  */
+		xpad->odata[4] = 0x00;
+		xpad->irq_out->transfer_buffer_length = 5;
 		return usb_submit_urb(xpad->irq_out, GFP_KERNEL);
 	}
 
