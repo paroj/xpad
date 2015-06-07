@@ -1223,11 +1223,38 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 			usb_kill_urb(xpad->irq_in);
 			goto fail4;
 		}
+
+		xpad->pad_present = 0;
+
+		/*
+		 * send presence packet
+		 * This will force the controller to resend connection packets.
+		 * This is useful in the case we activate the module after the
+		 * adapter has been plugged in, as it won't automatically
+		 * send us info about the controllers.
+		 */
+		mutex_lock(&xpad->odata_mutex);
+		xpad->odata[0] = 0x08;
+		xpad->odata[1] = 0x00;
+		xpad->odata[2] = 0x0F;
+		xpad->odata[3] = 0xC0;
+		xpad->odata[4] = 0x00;
+		xpad->odata[5] = 0x00;
+		xpad->odata[6] = 0x00;
+		xpad->odata[7] = 0x00;
+		xpad->odata[8] = 0x00;
+		xpad->odata[9] = 0x00;
+		xpad->odata[10] = 0x00;
+		xpad->odata[11] = 0x00;
+		xpad->irq_out->transfer_buffer_length = 12;
+		usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+		mutex_unlock(&xpad->odata_mutex);
+	} else {
+		xpad->pad_present = 1;
+		error = xpad_init_input(xpad);
+		if (error)
+			goto fail4;
 	}
-	xpad->pad_present = 1;
-	error = xpad_init_input(xpad);
-	if (error)
-		goto fail4;
 
 	return 0;
 
