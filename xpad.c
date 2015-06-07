@@ -1285,11 +1285,41 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 			usb_kill_urb(xpad->irq_in);
 			goto fail9;
 		}
+
+		/*
+		 * We don't know how to check the controller state at driver
+		 * load, so just disconnect them all, requiring the user to
+		 * repair the device in the order they want them used.  Good
+		 * point is that we don't connect devices in "random" order,
+		 * but the extra step seems a bit harsh as other operating
+		 * systems don't require this at the moment.
+		 *
+		 * Power-off packet information came from an OS-X
+		 * reverse-engineered driver located at:
+		 * http://tattiebogle.net/index.php/ProjectRoot/Xbox360Controller/OsxDriver#toc1
+		 */
+		mutex_lock(&xpad->odata_mutex);
+		xpad->odata[0] = 0x00;
+		xpad->odata[1] = 0x00;
+		xpad->odata[2] = 0x08;
+		xpad->odata[3] = 0xC0;
+		xpad->odata[4] = 0x00;
+		xpad->odata[5] = 0x00;
+		xpad->odata[6] = 0x00;
+		xpad->odata[7] = 0x00;
+		xpad->odata[8] = 0x00;
+		xpad->odata[9] = 0x00;
+		xpad->odata[10] = 0x00;
+		xpad->odata[11] = 0x00;
+		xpad->irq_out->transfer_buffer_length = 12;
+		usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+		mutex_unlock(&xpad->odata_mutex);
+	} else {
+		xpad->pad_present = 1;
+		error = xpad_init_input(xpad);
+		if (error)
+			goto fail9;
 	}
-	xpad->pad_present = 1;
-	error = xpad_init_input(xpad);
-	if (error)
-		goto fail9;
 
 	return 0;
 
