@@ -344,6 +344,7 @@ struct usb_xpad {
 
 	int mapping;			/* map d-pad to buttons or to axes */
 	int xtype;			/* type of xbox device */
+	int joydev_id;			/* the minor of the device */
 	const char *name;		/* name of the device */
 };
 
@@ -957,11 +958,6 @@ static int xpad_led_probe(struct usb_xpad *xpad)
 		return error;
 	}
 
-	/*
-	 * Light up the segment corresponding to controller number
-	 */
-	xpad_send_led_command(xpad, (led_no % 4) + 2);
-
 	return 0;
 }
 
@@ -977,6 +973,7 @@ static void xpad_led_disconnect(struct usb_xpad *xpad)
 #else
 static int xpad_led_probe(struct usb_xpad *xpad) { return 0; }
 static void xpad_led_disconnect(struct usb_xpad *xpad) { }
+static void xpad_send_led_command(struct usb_xpad *xpad, int command) { }
 #endif
 
 
@@ -1039,9 +1036,17 @@ static void xpad_set_up_abs(struct input_dev *input_dev, signed short abs)
 	}
 }
 
+static int xpad_find_joydev(struct device *dev, void *data)
+{
+	if (strstr(dev_name(dev), "js"))
+		return 1;
+	return 0;
+}
+
 static int xpad_init_input(struct usb_xpad *xpad)
 {
 	struct input_dev *input_dev;
+	struct device *joydev_dev;
 	int i, error;
 
 	input_dev = input_allocate_device();
@@ -1109,6 +1114,17 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	error = input_register_device(xpad->dev);
 	if (error)
 		goto fail_input_register;
+
+	joydev_dev = device_find_child(&xpad->dev->dev, NULL,
+				       xpad_find_joydev);
+	if (joydev_dev) {
+		dev_dbg(&xpad->dev->dev, "Found xpad with minor %i\n",
+			MINOR(joydev_dev->devt));
+		xpad->joydev_id = MINOR(joydev_dev->devt);
+
+		/* Light up the segment corresponding to controller number */
+		xpad_send_led_command(xpad, (xpad->joydev_id % 4) + 2);
+	}
 
 	return 0;
 
