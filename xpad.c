@@ -346,7 +346,10 @@ struct usb_xpad {
 	int xtype;			/* type of xbox device */
 	int joydev_id;			/* the minor of the device */
 	const char *name;		/* name of the device */
+	struct work_struct work;	/* to init/remove device from callback */
 };
+
+static int xpad_init_input(struct usb_xpad *xpad);
 
 /*
  *	xpad_process_packet
@@ -490,6 +493,22 @@ static void xpad360_process_packet(struct usb_xpad *xpad,
 	input_sync(dev);
 }
 
+static void presence_work_function(struct work_struct *work)
+{
+	struct usb_xpad *xpad = container_of(work, struct usb_xpad, work);
+	int error;
+
+	if (xpad->pad_present) {
+		error = xpad_init_input(xpad);
+		if (error) {
+			/* complain only, not much else we can do here */
+			dev_err(&xpad->dev->dev, "unable to init device\n");
+		}
+	} else {
+		input_unregister_device(xpad->dev);
+	}
+}
+
 /*
  * xpad360w_process_packet
  *
@@ -504,16 +523,22 @@ static void xpad360_process_packet(struct usb_xpad *xpad,
  * 01.1 - Pad state (Bytes 4+) valid
  *
  */
-
 static void xpad360w_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char *data)
 {
 	/* Presence change */
 	if (data[0] & 0x08) {
 		if (data[1] & 0x80) {
-			xpad->pad_present = 1;
-			usb_submit_urb(xpad->bulk_out, GFP_ATOMIC);
-		} else
-			xpad->pad_present = 0;
+			if (!xpad->pad_present) {
+				xpad->pad_present = 1;
+				usb_submit_urb(xpad->bulk_out, GFP_ATOMIC);
+				schedule_work(&xpad->work);
+			}
+		} else {
+			if (xpad->pad_present) {
+				xpad->pad_present = 0;
+				schedule_work(&xpad->work);
+			}
+		}
 	}
 
 	/* Valid pad data */
@@ -662,10 +687,13 @@ static void xpad_irq_in(struct urb *urb)
 	}
 
 exit:
-	retval = usb_submit_urb(urb, GFP_ATOMIC);
-	if (retval)
-		dev_err(dev, "%s - usb_submit_urb failed with result %d\n",
-			__func__, retval);
+	if (xpad->pad_present) {
+		retval = usb_submit_urb(urb, GFP_ATOMIC);
+		if (retval)
+			dev_err(dev,
+				"%s - usb_submit_urb failed with result %d\n",
+				__func__, retval);
+	}
 }
 
 static void xpad_bulk_out(struct urb *urb)
@@ -1190,6 +1218,7 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	xpad->mapping = xpad_device[i].mapping;
 	xpad->xtype = xpad_device[i].xtype;
 	xpad->name = xpad_device[i].name;
+	INIT_WORK(&xpad->work, presence_work_function);
 
 	if (xpad->xtype == XTYPE_UNKNOWN) {
 		if (intf->cur_altsetting->desc.bInterfaceClass == USB_CLASS_VENDOR_SPEC) {
@@ -1338,7 +1367,8 @@ static void xpad_disconnect(struct usb_interface *intf)
 	struct usb_xpad *xpad = usb_get_intfdata (intf);
 
 	xpad_led_disconnect(xpad);
-	input_unregister_device(xpad->dev);
+	if (xpad->pad_present)
+		input_unregister_device(xpad->dev);
 	xpad_deinit_output(xpad);
 
 	if (xpad->xtype == XTYPE_XBOX360W) {
@@ -1350,6 +1380,8 @@ static void xpad_disconnect(struct usb_interface *intf)
 	usb_free_urb(xpad->irq_in);
 	usb_free_coherent(xpad->udev, XPAD_PKT_LEN,
 			xpad->idata, xpad->idata_dma);
+
+	cancel_work_sync(&xpad->work);
 
 	kfree(xpad->bdata);
 	kfree(xpad);
