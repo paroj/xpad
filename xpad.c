@@ -957,8 +957,6 @@ static void xpad_led_set(struct led_classdev *led_cdev,
 
 static int xpad_led_probe(struct usb_xpad *xpad)
 {
-	static atomic_t led_seq	= ATOMIC_INIT(-1);
-	unsigned long led_no;
 	struct xpad_led *led;
 	struct led_classdev *led_cdev;
 	int error;
@@ -970,9 +968,7 @@ static int xpad_led_probe(struct usb_xpad *xpad)
 	if (!led)
 		return -ENOMEM;
 
-	led_no = atomic_inc_return(&led_seq);
-
-	snprintf(led->name, sizeof(led->name), "xpad%lu", led_no);
+	snprintf(led->name, sizeof(led->name), "xpad%d", xpad->joydev_id);
 	led->xpad = xpad;
 
 	led_cdev = &led->led_cdev;
@@ -1132,16 +1128,17 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	}
 
 	error = xpad_init_ff(xpad);
-	if (error)
-		goto fail_init_ff;
-
-	error = xpad_led_probe(xpad);
-	if (error)
-		goto fail_init_led;
+	if (error) {
+		input_free_device(input_dev);
+		return error;
+	}
 
 	error = input_register_device(xpad->dev);
-	if (error)
-		goto fail_input_register;
+	if (error) {
+		input_ff_destroy(input_dev);
+		input_free_device(input_dev);
+		return error;
+	}
 
 	joydev_dev = device_find_child(&xpad->dev->dev, NULL,
 				       xpad_find_joydev);
@@ -1154,17 +1151,14 @@ static int xpad_init_input(struct usb_xpad *xpad)
 		xpad_send_led_command(xpad, (xpad->joydev_id % 4) + 2);
 	}
 
+	error = xpad_led_probe(xpad);
+	if (error) {
+		input_ff_destroy(input_dev);
+		input_unregister_device(input_dev);
+		return error;
+	}
+
 	return 0;
-
-fail_input_register:
-	xpad_led_disconnect(xpad);
-
-fail_init_led:
-	input_ff_destroy(input_dev);
-
-fail_init_ff:
-	input_free_device(input_dev);
-	return error;
 }
 
 static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id)
