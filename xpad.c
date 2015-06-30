@@ -496,6 +496,8 @@ static void presence_work_function(struct work_struct *work)
 	struct usb_xpad *xpad = container_of(work, struct usb_xpad, work);
 	int error;
 
+	printk("%s: present %d\n", __func__, xpad->pad_present);
+
 	if (xpad->pad_present) {
 		error = xpad_init_input(xpad);
 		if (error) {
@@ -525,6 +527,8 @@ static void xpad360w_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned cha
 {
 	/* Presence change */
 	if (data[0] & 0x08) {
+		printk("%s: presence %d, present %d\n", __func__, data[1], xpad->pad_present);
+
 		if (data[1] & 0x80) {
 			if (!xpad->pad_present) {
 				xpad->pad_present = 1;
@@ -1010,6 +1014,8 @@ static int xpad_open(struct input_dev *dev)
 {
 	struct usb_xpad *xpad = input_get_drvdata(dev);
 
+	printk("%s\n", __func__);
+
 	/* URB was submitted in probe */
 	if (xpad->xtype == XTYPE_XBOX360W)
 		return 0;
@@ -1239,6 +1245,8 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	usb_set_intfdata(intf, xpad);
 
 	if (xpad->xtype == XTYPE_XBOX360W) {
+		printk("%s: interface nr %d\n", __func__, intf->cur_altsetting->desc.bInterfaceNumber);
+
 		/*
 		 * Submit the int URB immediately rather than waiting for open
 		 * because we get status messages from the device whether
@@ -1313,6 +1321,8 @@ static void xpad_disconnect(struct usb_interface *intf)
 			xpad->idata, xpad->idata_dma);
 
 	cancel_work_sync(&xpad->work);
+
+	printk("%s, present %d\n", __func__, xpad->pad_present);
 
 	kfree(xpad);
 
