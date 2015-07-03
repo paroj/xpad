@@ -346,6 +346,8 @@ struct usb_xpad {
 	struct work_struct work;	/* init/remove device from callback */
 };
 
+static unsigned long xpad_pad_seq;
+
 static int xpad_init_input(struct usb_xpad *xpad);
 static void xpad_deinit_input(struct usb_xpad *xpad);
 
@@ -940,6 +942,12 @@ static void xpad_send_led_command(struct usb_xpad *xpad, int command)
  */
 static void xpad_identify_controller(struct usb_xpad *xpad)
 {
+	if (xpad->xtype != XTYPE_XBOX360 && xpad->xtype != XTYPE_XBOX360W)
+		return;
+
+	xpad->pad_nr = find_first_zero_bit(&xpad_pad_seq, 32);
+	set_bit(xpad->pad_nr, &xpad_pad_seq);
+
 	xpad_send_led_command(xpad, (xpad->pad_nr % 4) + 2);
 }
 
@@ -954,7 +962,6 @@ static void xpad_led_set(struct led_classdev *led_cdev,
 
 static int xpad_led_probe(struct usb_xpad *xpad)
 {
-	static atomic_t led_seq = ATOMIC_INIT(-1);
 	struct xpad_led *led;
 	struct led_classdev *led_cdev;
 	int error;
@@ -965,8 +972,6 @@ static int xpad_led_probe(struct usb_xpad *xpad)
 	xpad->led = led = kzalloc(sizeof(struct xpad_led), GFP_KERNEL);
 	if (!led)
 		return -ENOMEM;
-
-	xpad->pad_nr = atomic_inc_return(&led_seq);
 
 	snprintf(led->name, sizeof(led->name), "xpad%lu", xpad->pad_nr);
 	led->xpad = xpad;
@@ -1119,6 +1124,8 @@ static int xpad_init_input(struct usb_xpad *xpad)
 			xpad_set_up_abs(input_dev, xpad_abs_triggers[i]);
 	}
 
+	xpad_identify_controller(xpad);
+
 	error = xpad_init_ff(xpad);
 	if (error)
 		goto fail_init_ff;
@@ -1130,8 +1137,6 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	error = input_register_device(xpad->dev);
 	if (error)
 		goto fail_input_register;
-
-	xpad_identify_controller(xpad);
 
 	return 0;
 
@@ -1292,6 +1297,11 @@ static void xpad_deinit_input(struct usb_xpad *xpad)
 {
 	xpad_led_disconnect(xpad);
 	input_unregister_device(xpad->dev);
+
+	if (xpad->xtype != XTYPE_XBOX360 && xpad->xtype != XTYPE_XBOX360W)
+		return;
+
+	clear_bit(xpad->pad_nr, &xpad_pad_seq);
 }
 
 static void xpad_disconnect(struct usb_interface *intf)
