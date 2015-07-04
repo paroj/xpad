@@ -329,6 +329,7 @@ struct usb_xpad {
 	dma_addr_t idata_dma;
 
 	struct urb *irq_out;		/* urb for interrupt out report */
+	int irq_out_active;		/* we must not use an active URB */
 	unsigned char *odata;		/* output data */
 	dma_addr_t odata_dma;
 	struct mutex odata_mutex;
@@ -701,6 +702,7 @@ static void xpad_irq_out(struct urb *urb)
 	switch (status) {
 	case 0:
 		/* success */
+		xpad->irq_out_active = 0;
 		return;
 
 	case -ECONNRESET:
@@ -709,6 +711,7 @@ static void xpad_irq_out(struct urb *urb)
 		/* this urb is terminated, clean up */
 		dev_dbg(dev, "%s - urb shutting down with status: %d\n",
 			__func__, status);
+		xpad->irq_out_active = 0;
 		return;
 
 	default:
@@ -786,12 +789,15 @@ static int xpad_play_effect(struct input_dev *dev, void *data, struct ff_effect 
 	struct usb_xpad *xpad = input_get_drvdata(dev);
 	__u16 strong;
 	__u16 weak;
+	int retval;
 
 	if (effect->type != FF_RUMBLE)
 		return 0;
 
 	strong = effect->u.rumble.strong_magnitude;
 	weak = effect->u.rumble.weak_magnitude;
+
+	mutex_lock(&xpad->odata_mutex);
 
 	switch (xpad->xtype) {
 	case XTYPE_XBOX:
@@ -849,13 +855,25 @@ static int xpad_play_effect(struct input_dev *dev, void *data, struct ff_effect 
 		break;
 
 	default:
+		mutex_unlock(&xpad->odata_mutex);
 		dev_dbg(&xpad->dev->dev,
 			"%s - rumble command sent to unsupported xpad type: %d\n",
 			__func__, xpad->xtype);
 		return -EINVAL;
 	}
 
-	return usb_submit_urb(xpad->irq_out, GFP_ATOMIC);
+	if (!xpad->irq_out_active) {
+		retval = usb_submit_urb(xpad->irq_out, GFP_ATOMIC);
+		xpad->irq_out_active = 1;
+	} else {
+		retval = -EIO;
+		dev_dbg(&xpad->dev->dev, "%s - dropped, irq_out is active\n",
+				__func__);
+	}
+
+	mutex_unlock(&xpad->odata_mutex);
+
+	return retval;
 }
 
 static int xpad_init_ff(struct usb_xpad *xpad)
@@ -931,7 +949,13 @@ static void xpad_send_led_command(struct usb_xpad *xpad, int command)
 		break;
 	}
 
-	usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+	if (!xpad->irq_out_active) {
+		usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+		xpad->irq_out_active = 1;
+	} else
+		dev_dbg(&xpad->dev->dev, "%s - dropped, irq_out is active\n",
+				__func__);
+
 	mutex_unlock(&xpad->odata_mutex);
 }
 
@@ -1007,6 +1031,7 @@ static void xpad_identify_controller(struct usb_xpad *xpad) { }
 static int xpad_open(struct input_dev *dev)
 {
 	struct usb_xpad *xpad = input_get_drvdata(dev);
+	int retval;
 
 	/* URB was submitted in probe */
 	if (xpad->xtype == XTYPE_XBOX360W)
@@ -1017,11 +1042,14 @@ static int xpad_open(struct input_dev *dev)
 		return -EIO;
 
 	if (xpad->xtype == XTYPE_XBOXONE) {
+		mutex_lock(&xpad->odata_mutex);
 		/* Xbox one controller needs to be initialized. */
 		xpad->odata[0] = 0x05;
 		xpad->odata[1] = 0x20;
 		xpad->irq_out->transfer_buffer_length = 2;
-		return usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+		retval = usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+		mutex_unlock(&xpad->odata_mutex);
+		return retval;
 	}
 
 	return 0;
@@ -1272,7 +1300,14 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 		xpad->odata[10] = 0x00;
 		xpad->odata[11] = 0x00;
 		xpad->irq_out->transfer_buffer_length = 12;
-		usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+
+		if (!xpad->irq_out_active) {
+			usb_submit_urb(xpad->irq_out, GFP_KERNEL);
+			xpad->irq_out_active = 1;
+		} else
+			dev_dbg(&xpad->dev->dev,
+				"%s - dropped, irq_out is active\n", __func__);
+
 		mutex_unlock(&xpad->odata_mutex);
 	} else {
 		xpad->pad_present = 1;
