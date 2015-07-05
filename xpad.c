@@ -61,6 +61,7 @@
  * Later changes can be tracked in SCM.
  */
 
+// #define DEBUG
 #include <linux/bits.h>
 #include <linux/kernel.h>
 #include <linux/input.h>
