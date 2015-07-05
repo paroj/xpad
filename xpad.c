@@ -74,7 +74,7 @@
  *
  * Later changes can be tracked in SCM.
  */
-
+#define DEBUG
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
