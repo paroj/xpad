@@ -850,7 +850,6 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 {
 	struct usb_endpoint_descriptor *ep_irq_out;
 	int ep_irq_out_idx;
-	int error;
 
 	if (xpad->xtype == XTYPE_UNKNOWN)
 		return 0;
@@ -860,16 +859,15 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 	xpad->odata = usb_alloc_coherent(xpad->udev, XPAD_PKT_LEN,
 					 GFP_KERNEL, &xpad->odata_dma);
 	if (!xpad->odata) {
-		error = -ENOMEM;
-		goto fail1;
+		return -ENOMEM;
 	}
 
 	spin_lock_init(&xpad->odata_lock);
 
 	xpad->irq_out = usb_alloc_urb(0, GFP_KERNEL);
 	if (!xpad->irq_out) {
-		error = -ENOMEM;
-		goto fail2;
+		usb_free_coherent(xpad->udev, XPAD_PKT_LEN, xpad->odata, xpad->odata_dma);
+		return -ENOMEM;
 	}
 
 	/* Xbox One controller has in/out endpoints swapped. */
@@ -884,9 +882,6 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 	xpad->irq_out->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
 	return 0;
-
- fail2:	usb_free_coherent(xpad->udev, XPAD_PKT_LEN, xpad->odata, xpad->odata_dma);
- fail1:	return error;
 }
 
 static void xpad_stop_output(struct usb_xpad *xpad)
