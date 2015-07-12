@@ -1423,17 +1423,23 @@ err_free_mem:
 
 }
 
-static void xpad_disconnect(struct usb_interface *intf)
+static void xpad_stop_communication(struct usb_xpad *xpad)
 {
-	struct usb_xpad *xpad = usb_get_intfdata (intf);
-
-	xpad_deinit_output(xpad);
+	xpad_stop_output(xpad);
 
 	if (xpad->xtype == XTYPE_XBOX360W) {
 		usb_kill_urb(xpad->irq_in);
 	}
 
 	cancel_work_sync(&xpad->work);
+}
+
+static void xpad_disconnect(struct usb_interface *intf)
+{
+	struct usb_xpad *xpad = usb_get_intfdata(intf);
+
+	xpad_stop_communication(xpad);
+	xpad_deinit_output(xpad);
 
 	if (xpad->pad_present)
 		xpad_deinit_input(xpad);
@@ -1447,10 +1453,26 @@ static void xpad_disconnect(struct usb_interface *intf)
 	usb_set_intfdata(intf, NULL);
 }
 
+static int xpad_suspend(struct usb_interface *intf, pm_message_t message)
+{
+	struct usb_xpad *xpad = usb_get_intfdata(intf);
+
+	xpad_stop_communication(xpad);
+	return 0;
+}
+
+static int xpad_resume(struct usb_interface *intf)
+{
+	usb_queue_reset_device(intf);
+	return 0;
+}
+
 static struct usb_driver xpad_driver = {
 	.name		= "xpad",
 	.probe		= xpad_probe,
 	.disconnect	= xpad_disconnect,
+	.suspend	= xpad_suspend,
+	.resume		= xpad_resume,
 	.id_table	= xpad_table,
 };
 
