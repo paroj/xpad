@@ -554,7 +554,7 @@ static void xpad360w_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned cha
 	}
 
 	/* Valid pad data */
-	if (!(data[1] & 0x1))
+	if (!(data[1] & 0x1) || data[1] == 0xf)
 		return;
 
 	xpad360_process_packet(xpad, cmd, &data[4]);
