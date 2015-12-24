@@ -354,6 +354,7 @@ struct usb_xpad {
 	struct usb_anchor irq_out_anchor;
 	bool irq_out_active;		/* we must not use an active URB */
 	u8 odata_serial;		/* serial number for xbox one protocol */
+	u8 xone_init_msg;		/* xbox one initialization sequence counter */
 	unsigned char *odata;		/* output data */
 	dma_addr_t odata_dma;
 	spinlock_t odata_lock;
@@ -739,11 +740,44 @@ exit:
 			__func__, retval);
 }
 
+/* XBox One Init Sequence
+ *  - no idea how much of this is actually needed
+ *  - from https://github.com/quantus/xbox-one-controller-protocol:
+ *    Packet format: CMD, CMD, SEQ, Payload0, ..., PayloadN
+ *  - note: SEQ will get overwritten by the actual serial number on sending
+ */
+static const struct xpad_output_packet xpad_one_init[] = {
+	/* start controller w/o input. seems not to be needed. */
+	/* was not sent due to a bug, but we still got success reports */
+	{{ 0x04, 0x20, 0x01, 0x00 }, 4, true},
+	/* no idea.. */
+	{{ 0x01, 0x20, 0x01, 0x09, 0x00, 0x04, 0x20, 0x3a, 0x00, 0x00, 0x00, 0x80, 0x00}, 13, true},
+	{{ 0x01, 0x20, 0x01, 0x09, 0x00, 0x04, 0x20, 0xba, 0x00, 0x00, 0x00, 0x00, 0x00}, 13, true},
+	/* start controller with input - twice? */
+	{{ 0x05, 0x20, 0x02, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x55, 0x53}, 13, true},
+	/* this was the only packet needed for pre 2015 firmware*/
+	{{ 0x05, 0x20, 0x03, 0x01 /* rumble enable? */, 0x00}, 5, true},
+	/* no idea.. */
+	{{ 0x0a, 0x20, 0x04, 0x03, 0x00, 0x01, 0x14}, 7, true}
+};
+
+static const u8 xpad_one_init_count = sizeof(xpad_one_init)/sizeof(xpad_one_init[0]);
+
 /* Callers must hold xpad->odata_lock spinlock */
 static bool xpad_prepare_next_out_packet(struct usb_xpad *xpad)
 {
 	struct xpad_output_packet *pkt, *packet = NULL;
 	int i;
+
+	/* with xpad one we need to complete the init sequence first */
+	if (xpad->xtype == XTYPE_XBOXONE &&
+	    xpad->xone_init_msg < xpad_one_init_count) {
+		pkt = &xpad->out_packets[XPAD_OUT_CMD_IDX];
+		*pkt = xpad_one_init[xpad->xone_init_msg++];
+		pkt->data[2] = xpad->odata_serial++; /* packet serial */
+		/* Reset the sequence so we send out init first */
+		xpad->last_out_packet = -1;
+	}
 
 	for (i = 0; i < XPAD_NUM_OUT_PACKETS; i++) {
 		if (++xpad->last_out_packet >= XPAD_NUM_OUT_PACKETS)
@@ -752,8 +786,8 @@ static bool xpad_prepare_next_out_packet(struct usb_xpad *xpad)
 		pkt = &xpad->out_packets[xpad->last_out_packet];
 		if (pkt->pending) {
 			dev_dbg(&xpad->intf->dev,
-				"%s - found pending output packet %d\n",
-				__func__, xpad->last_out_packet);
+				"%s - found pending output packet %d: %#04x\n",
+				__func__, xpad->last_out_packet, pkt->data[0]);
 			packet = pkt;
 			break;
 		}
@@ -931,24 +965,12 @@ static int xpad_inquiry_pad_presence(struct usb_xpad *xpad)
 
 static int xpad_start_xbox_one(struct usb_xpad *xpad)
 {
-	struct xpad_output_packet *packet =
-			&xpad->out_packets[XPAD_OUT_CMD_IDX];
 	unsigned long flags;
 	int retval;
 
 	spin_lock_irqsave(&xpad->odata_lock, flags);
 
-	/* Xbox one controller needs to be initialized. */
-	packet->data[0] = 0x05;
-	packet->data[1] = 0x20;
-	packet->data[2] = xpad->odata_serial++; /* packet serial */
-	packet->data[3] = 0x01; /* rumble bit enable?  */
-	packet->data[4] = 0x00;
-	packet->len = 5;
-	packet->pending = true;
-
-	/* Reset the sequence so we send out start packet first */
-	xpad->last_out_packet = -1;
+	/* trigger the Xbox one controller initialization sequence */
 	retval = xpad_try_sending_next_out_packet(xpad);
 
 	spin_unlock_irqrestore(&xpad->odata_lock, flags);
