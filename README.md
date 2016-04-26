@@ -12,7 +12,7 @@ Driver for the Xbox/ Xbox 360/ Xbox 360 Wireless/ Xbox One Controllers
 * added support for Xbox One Covert Forces Edition (Patch by Erik Lundgren)
 * fixed support for Razer Atrox Arcade Stick (Patch by Dario Scarpa)
 
-# Installation
+# Installing
 ```
 sudo git clone https://github.com/paroj/xpad.git /usr/src/xpad-0.4
 sudo dkms install -m xpad -v 0.4
@@ -24,6 +24,11 @@ sudo git fetch
 sudo git checkout origin/master
 sudo dkms remove -m xpad -v 0.4 --all
 sudo dkms install -m xpad -v 0.4
+```
+# Removing
+```
+sudo dkms remove -m xpad -v 0.4 --all
+sudo rm -rf /usr/src/xpad-0.4
 ```
 # Usage
 This driver creates three devices for each attached gamepad
