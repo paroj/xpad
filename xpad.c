@@ -1201,6 +1201,13 @@ static void xpad_irq_in(struct urb *urb)
 		goto exit;
 	}
 
+#if defined(DEBUG_VERBOSE)
+	/* If you set rowsize to larger than 32 it defaults to 16?
+	 * Otherwise I would set it to XPAD_PKT_LEN                  V
+	 */
+	print_hex_dump(KERN_DEBUG, "xpad-dbg: ", DUMP_PREFIX_OFFSET, 32, 1, xpad->idata, XPAD_PKT_LEN, 0);
+#endif
+
 	switch (xpad->xtype) {
 	case XTYPE_XBOX360:
 		xpad360_process_packet(xpad, xpad->dev, 0, xpad->idata);
