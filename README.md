@@ -3,7 +3,7 @@ Driver for the Xbox/ Xbox 360/ Xbox 360 Wireless/ Xbox One Controllers
 
 ## Changes compared to Linux Staging (4.2)
 
-* controller LEDs and Force Feedaback now works even after suspend/ resume
+* controller LEDs and Force Feedback now works even after suspend/ resume
 * LED and Force Feedback packets are now re-submitted instead of being dropped
   * also fixes kernel warnings due to submitting active URB requests
 * only expose actually connected Xbox 360 Wireless Controllers ([patch by  Pierre-Loup A. Griffais](http://www.spinics.net/lists/linux-input/msg29450.html))
