@@ -74,7 +74,7 @@
  *
  * Later changes can be tracked in SCM.
  */
-
+#define DEBUG
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/rcupdate.h>
@@ -114,6 +114,10 @@ MODULE_PARM_DESC(triggers_to_buttons, "Map triggers to buttons rather than axes 
 static bool sticks_to_null;
 module_param(sticks_to_null, bool, S_IRUGO);
 MODULE_PARM_DESC(sticks_to_null, "Do not map sticks at all for unknown pads");
+
+static bool auto_poweroff = true;
+module_param(auto_poweroff, bool, S_IWUSR | S_IRUGO);
+MODULE_PARM_DESC(auto_poweroff, "Power off wireless controllers on suspend");
 
 static const struct xpad_device {
 	u16 idVendor;
@@ -229,54 +233,55 @@ static const struct xpad_device {
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
 };
 
-/* buttons shared with xbox and xbox360 */
-static const signed short xpad_common_btn[] = {
-	BTN_A, BTN_B, BTN_X, BTN_Y,			/* "analog" buttons */
+/* buttons shared with all xbox compatible controllers */
+static const signed short xpad_btn_common[] = {
+	BTN_A, BTN_B, BTN_X, BTN_Y,						/* coloured buttons */
 	BTN_START, BTN_SELECT, BTN_THUMBL, BTN_THUMBR,	/* start/back/sticks */
-	-1						/* terminating entry */
-};
-
-/* original xbox controllers only */
-static const signed short xpad_btn[] = {
-	BTN_C, BTN_Z,		/* "analog" buttons */
-	-1			/* terminating entry */
+	-1												/* terminating entry */
 };
 
 /* used when dpad is mapped to buttons */
-static const signed short xpad_btn_pad[] = {
+static const signed short xpad_btn_dpad[] = {
 	BTN_TRIGGER_HAPPY1, BTN_TRIGGER_HAPPY2,		/* d-pad left, right */
 	BTN_TRIGGER_HAPPY3, BTN_TRIGGER_HAPPY4,		/* d-pad up, down */
-	-1				/* terminating entry */
+	-1											/* terminating entry */
 };
 
 /* used when triggers are mapped to buttons */
 static const signed short xpad_btn_triggers[] = {
 	BTN_TL2, BTN_TR2,		/* triggers left/right */
-	-1
+	-1						/* terminating entry */
 };
 
-static const signed short xpad360_btn[] = {  /* buttons for x360 controller */
-	BTN_TL, BTN_TR,		/* Button LB/RB */
-	BTN_MODE,		/* The big X button */
-	-1
+/* original xbox controllers only */
+static const signed short xpad_btn_original[] = {
+	BTN_C, BTN_Z,		/* "analog" buttons */
+	-1					/* terminating entry */
 };
 
-static const signed short xpad_abs[] = {
+/* buttons for xbox 360 and xbox one controllers */
+static const signed short xpad_btn_360[] = {
+	BTN_TL, BTN_TR,		/* Button LBumper/RBumper */
+	BTN_MODE,			/* The big X button */
+	-1					/* terminating entry */
+};
+
+static const signed short xpad_abs_sticks[] = {
 	ABS_X, ABS_Y,		/* left stick */
 	ABS_RX, ABS_RY,		/* right stick */
-	-1			/* terminating entry */
+	-1					/* terminating entry */
 };
 
 /* used when dpad is mapped to axes */
-static const signed short xpad_abs_pad[] = {
+static const signed short xpad_abs_dpad[] = {
 	ABS_HAT0X, ABS_HAT0Y,	/* d-pad axes */
-	-1			/* terminating entry */
+	-1						/* terminating entry */
 };
 
 /* used when triggers are mapped to axes */
 static const signed short xpad_abs_triggers[] = {
 	ABS_Z, ABS_RZ,		/* triggers left/right */
-	-1
+	-1					/* terminating entry */
 };
 
 /*
@@ -316,18 +321,18 @@ static struct usb_device_id xpad_table[] = {
 	XPAD_XBOXONE_VENDOR(0x0738),		/* Mad Catz FightStick TE 2 */
 	XPAD_XBOX360_VENDOR(0x0e6f),		/* 0x0e6f X-Box 360 controllers */
 	XPAD_XBOXONE_VENDOR(0x0e6f),		/* 0x0e6f X-Box One controllers */
+	XPAD_XBOX360_VENDOR(0x0f0d),		/* Hori X-Box 360 Controllers */
+	XPAD_XBOXONE_VENDOR(0x0f0d),		/* Hori X-Box One Controllers */
 	XPAD_XBOX360_VENDOR(0x12ab),		/* X-Box 360 dance pads */
 	XPAD_XBOX360_VENDOR(0x1430),		/* RedOctane X-Box 360 controllers */
-	XPAD_XBOX360_VENDOR(0x146b),		/* BigBen Interactive Controllers */
-	XPAD_XBOX360_VENDOR(0x1bad),		/* Harminix Rock Band Guitar and Drums */
-	XPAD_XBOX360_VENDOR(0x0f0d),		/* Hori Controllers */
-	XPAD_XBOXONE_VENDOR(0x0f0d),		/* Hori Controllers */
-	XPAD_XBOX360_VENDOR(0x1689),		/* Razer Onza */
-	XPAD_XBOX360_VENDOR(0x24c6),		/* PowerA Controllers */
-	XPAD_XBOXONE_VENDOR(0x24c6),		/* PowerA Controllers */
+	XPAD_XBOX360_VENDOR(0x146b),		/* BigBen Interactive X-Box 360 Controllers */
 	XPAD_XBOX360_VENDOR(0x1532),		/* Razer Sabertooth */
 	XPAD_XBOX360_VENDOR(0x15e4),		/* Numark X-Box 360 controllers */
 	XPAD_XBOX360_VENDOR(0x162e),		/* Joytech X-Box 360 controllers */
+	XPAD_XBOX360_VENDOR(0x1689),		/* Razer Onza */
+	XPAD_XBOX360_VENDOR(0x1bad),		/* Harminix Rock Band Guitar and Drums */
+	XPAD_XBOX360_VENDOR(0x24c6),		/* PowerA X-Box 360 Controllers */
+	XPAD_XBOXONE_VENDOR(0x24c6),		/* PowerA X-Box One Controllers */
 	{ }
 };
 
@@ -604,14 +609,28 @@ static void xpad360w_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned cha
 }
 
 /*
- *	xpadone_process_buttons
+ *	xpadone_process_packet
  *
- *	Process a button update packet from an Xbox one controller.
+ *	Completes a request by converting the data into events for the
+ *	input subsystem. This version is for the Xbox One controller.
+ *
+ *	The report format was gleaned from
+ *	https://github.com/kylelemons/xbox/blob/master/xbox.go
  */
-static void xpadone_process_buttons(struct usb_xpad *xpad,
-				struct input_dev *dev,
-				unsigned char *data)
+static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char *data)
 {
+	struct input_dev *dev = xpad->dev;
+
+	/* the xbox button has its own special report */
+	if (data[0] == 0X07) {
+		input_report_key(dev, BTN_MODE, data[4] & 0x01);
+		input_sync(dev);
+		return;
+	}
+	/* check invalid packet */
+	else if (data[0] != 0X20)
+		return;
+
 	/* menu/view buttons */
 	input_report_key(dev, BTN_START,  data[4] & 0x04);
 	input_report_key(dev, BTN_SELECT, data[4] & 0x08);
@@ -674,34 +693,6 @@ static void xpadone_process_buttons(struct usb_xpad *xpad,
 	input_sync(dev);
 }
 
-/*
- *	xpadone_process_packet
- *
- *	Completes a request by converting the data into events for the
- *	input subsystem. This version is for the Xbox One controller.
- *
- *	The report format was gleaned from
- *	https://github.com/kylelemons/xbox/blob/master/xbox.go
- */
-
-static void xpadone_process_packet(struct usb_xpad *xpad,
-				u16 cmd, unsigned char *data)
-{
-	struct input_dev *dev = xpad->dev;
-
-	switch (data[0]) {
-	case 0x20:
-		xpadone_process_buttons(xpad, dev, data);
-		break;
-
-	case 0x07:
-		/* the xbox button has its own special report */
-		input_report_key(dev, BTN_MODE, data[4] & 0x01);
-		input_sync(dev);
-		break;
-	}
-}
-
 static void xpad_irq_in(struct urb *urb)
 {
 	struct usb_xpad *xpad = urb->context;
@@ -726,6 +717,13 @@ static void xpad_irq_in(struct urb *urb)
 			__func__, status);
 		goto exit;
 	}
+
+#if defined(DEBUG_VERBOSE)
+	/* If you set rowsize to larger than 32 it defaults to 16?
+	 * Otherwise I would set it to XPAD_PKT_LEN                  V
+	 */
+	print_hex_dump(KERN_DEBUG, "xpad-dbg: ", DUMP_PREFIX_OFFSET, 32, 1, xpad->idata, XPAD_PKT_LEN, 0);
+#endif
 
 	switch (xpad->xtype) {
 	case XTYPE_XBOX360:
@@ -850,7 +848,6 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 {
 	struct usb_endpoint_descriptor *ep_irq_out;
 	int ep_irq_out_idx;
-	int error;
 
 	if (xpad->xtype == XTYPE_UNKNOWN)
 		return 0;
@@ -860,16 +857,15 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 	xpad->odata = usb_alloc_coherent(xpad->udev, XPAD_PKT_LEN,
 					 GFP_KERNEL, &xpad->odata_dma);
 	if (!xpad->odata) {
-		error = -ENOMEM;
-		goto fail1;
+		return -ENOMEM;
 	}
 
 	spin_lock_init(&xpad->odata_lock);
 
 	xpad->irq_out = usb_alloc_urb(0, GFP_KERNEL);
 	if (!xpad->irq_out) {
-		error = -ENOMEM;
-		goto fail2;
+		usb_free_coherent(xpad->udev, XPAD_PKT_LEN, xpad->odata, xpad->odata_dma);
+		return -ENOMEM;
 	}
 
 	/* Xbox One controller has in/out endpoints swapped. */
@@ -884,9 +880,6 @@ static int xpad_init_output(struct usb_interface *intf, struct usb_xpad *xpad)
 	xpad->irq_out->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
 	return 0;
-
- fail2:	usb_free_coherent(xpad->udev, XPAD_PKT_LEN, xpad->odata, xpad->odata_dma);
- fail1:	return error;
 }
 
 static void xpad_stop_output(struct usb_xpad *xpad)
@@ -1249,6 +1242,36 @@ static void xpad_stop_input(struct usb_xpad *xpad)
 	usb_kill_urb(xpad->irq_in);
 }
 
+static void xpad360w_poweroff_controller(struct usb_xpad *xpad)
+{
+	unsigned long flags;
+	struct xpad_output_packet *packet =
+			&xpad->out_packets[XPAD_OUT_CMD_IDX];
+
+	spin_lock_irqsave(&xpad->odata_lock, flags);
+
+	packet->data[0] = 0x00;
+	packet->data[1] = 0x00;
+	packet->data[2] = 0x08;
+	packet->data[3] = 0xC0;
+	packet->data[4] = 0x00;
+	packet->data[5] = 0x00;
+	packet->data[6] = 0x00;
+	packet->data[7] = 0x00;
+	packet->data[8] = 0x00;
+	packet->data[9] = 0x00;
+	packet->data[10] = 0x00;
+	packet->data[11] = 0x00;
+	packet->len = 12;
+	packet->pending = true;
+
+	/* Reset the sequence so we send out poweroff now */
+	xpad->last_out_packet = -1;
+	xpad_try_sending_next_out_packet(xpad);
+
+	spin_unlock_irqrestore(&xpad->odata_lock, flags);
+}
+
 static int xpad360w_start_input(struct usb_xpad *xpad)
 {
 	int error;
@@ -1357,27 +1380,27 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
 		__set_bit(EV_ABS, input_dev->evbit);
 		/* set up axes */
-		for (i = 0; xpad_abs[i] >= 0; i++)
-			xpad_set_up_abs(input_dev, xpad_abs[i]);
+		for (i = 0; xpad_abs_sticks[i] >= 0; i++)
+			xpad_set_up_abs(input_dev, xpad_abs_sticks[i]);
 	}
 
 	/* set up standard buttons */
-	for (i = 0; xpad_common_btn[i] >= 0; i++)
-		__set_bit(xpad_common_btn[i], input_dev->keybit);
+	for (i = 0; xpad_btn_common[i] >= 0; i++)
+		__set_bit(xpad_btn_common[i], input_dev->keybit);
 
 	/* set up model-specific ones */
 	if (xpad->xtype == XTYPE_XBOX360 || xpad->xtype == XTYPE_XBOX360W ||
 	    xpad->xtype == XTYPE_XBOXONE) {
-		for (i = 0; xpad360_btn[i] >= 0; i++)
-			__set_bit(xpad360_btn[i], input_dev->keybit);
+		for (i = 0; xpad_btn_360[i] >= 0; i++)
+			__set_bit(xpad_btn_360[i], input_dev->keybit);
 	} else {
-		for (i = 0; xpad_btn[i] >= 0; i++)
-			__set_bit(xpad_btn[i], input_dev->keybit);
+		for (i = 0; xpad_btn_original[i] >= 0; i++)
+			__set_bit(xpad_btn_original[i], input_dev->keybit);
 	}
 
 	if (xpad->mapping & MAP_DPAD_TO_BUTTONS) {
-		for (i = 0; xpad_btn_pad[i] >= 0; i++)
-			__set_bit(xpad_btn_pad[i], input_dev->keybit);
+		for (i = 0; xpad_btn_dpad[i] >= 0; i++)
+			__set_bit(xpad_btn_dpad[i], input_dev->keybit);
 	}
 
 	/*
@@ -1388,8 +1411,8 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	 */
 	if (!(xpad->mapping & MAP_DPAD_TO_BUTTONS) ||
 	    xpad->xtype == XTYPE_XBOX360W) {
-		for (i = 0; xpad_abs_pad[i] >= 0; i++)
-			xpad_set_up_abs(input_dev, xpad_abs_pad[i]);
+		for (i = 0; xpad_abs_dpad[i] >= 0; i++)
+			xpad_set_up_abs(input_dev, xpad_abs_dpad[i]);
 	}
 
 	if (xpad->mapping & MAP_TRIGGERS_TO_BUTTONS) {
@@ -1591,6 +1614,15 @@ static int xpad_suspend(struct usb_interface *intf, pm_message_t message)
 		 * or goes away.
 		 */
 		xpad360w_stop_input(xpad);
+
+		/*
+		 * The wireless adapter is going off now, so the
+		 * gamepads are going to become disconnected.
+		 * Unless explicitly disabled, power them down
+		 * so they don't just sit there flashing.
+		 */
+		if (auto_poweroff && xpad->pad_present)
+			xpad360w_poweroff_controller(xpad);
 	} else {
 		mutex_lock(&input->mutex);
 		if (input->users)
@@ -1627,7 +1659,6 @@ static struct usb_driver xpad_driver = {
 	.disconnect	= xpad_disconnect,
 	.suspend	= xpad_suspend,
 	.resume		= xpad_resume,
-	.reset_resume	= xpad_resume,
 	.id_table	= xpad_table,
 };
 
