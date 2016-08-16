@@ -1383,7 +1383,7 @@ static int xpad_init_input(struct usb_xpad *xpad)
 
 	input_set_drvdata(input_dev, xpad);
 
-	if (xpad->xtype != XTYPE_XBOX360W) {
+	if (xpad->xtype != XTYPE_XBOX360W && xpad->xtype != XTYPE_XBOXONE) {
 		input_dev->open = xpad_open;
 		input_dev->close = xpad_close;
 	}
@@ -1575,9 +1575,21 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 		error = xpad_init_input(xpad);
 		if (error)
 			goto err_deinit_output;
+
+		/*
+		 * Newer Xbox One controllers will hang and disconnect if
+		 * not initialized and read from when receiving user input.
+		 */
+		if (xpad->xtype == XTYPE_XBOXONE) {
+			error = xpad_start_input(xpad);
+			if (error)
+				goto err_deinit_input;
+		}
 	}
 	return 0;
 
+err_deinit_input:
+	xpad_deinit_input(xpad);
 err_deinit_output:
 	xpad_deinit_output(xpad);
 err_free_in_urb:
@@ -1595,6 +1607,8 @@ static void xpad_disconnect(struct usb_interface *intf)
 
 	if (xpad->xtype == XTYPE_XBOX360W)
 		xpad360w_stop_input(xpad);
+	else if (xpad->xtype == XTYPE_XBOXONE)
+		xpad_stop_input(xpad);
 
 	xpad_deinit_input(xpad);
 
@@ -1638,7 +1652,7 @@ static int xpad_suspend(struct usb_interface *intf, pm_message_t message)
 			xpad360w_poweroff_controller(xpad);
 	} else {
 		mutex_lock(&input->mutex);
-		if (input->users)
+		if (input->users || xpad->xtype == XTYPE_XBOXONE)
 			xpad_stop_input(xpad);
 		mutex_unlock(&input->mutex);
 	}
@@ -1658,7 +1672,7 @@ static int xpad_resume(struct usb_interface *intf)
 		retval = xpad360w_start_input(xpad);
 	} else {
 		mutex_lock(&input->mutex);
-		if (input->users)
+		if (input->users || xpad->xtype == XTYPE_XBOXONE)
 			retval = xpad_start_input(xpad);
 		mutex_unlock(&input->mutex);
 	}
