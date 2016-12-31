@@ -958,7 +958,7 @@ static int xpad_inquiry_pad_presence(struct usb_xpad *xpad)
 	return retval;
 }
 
-static int xpad_start_xbox_one(struct usb_xpad *xpad)
+static int xpadone_send_init_pkt(struct usb_xpad *xpad, const u8 *data, int len)
 {
 	struct xpad_output_packet *packet =
 			&xpad->out_packets[XPAD_OUT_CMD_IDX];
@@ -967,16 +967,15 @@ static int xpad_start_xbox_one(struct usb_xpad *xpad)
 
 	spin_lock_irqsave(&xpad->odata_lock, flags);
 
-	/* Xbox one controller needs to be initialized. */
-	packet->data[0] = 0x05;
-	packet->data[1] = 0x20;
-	packet->data[2] = xpad->odata_serial++; /* packet serial */
-	packet->data[3] = 0x01; /* rumble bit enable?  */
-	packet->data[4] = 0x00;
-	packet->len = 5;
+	/* There should be no pending command packets */
+	WARN_ON_ONCE(packet->pending);
+
+	memcpy(packet->data, data, len);
+	packet->data[2] = xpad->odata_serial++;
+	packet->len = len;
 	packet->pending = true;
 
-	/* Reset the sequence so we send out start packet first */
+	/* Reset the sequence so we send out the init packet now */
 	xpad->last_out_packet = -1;
 	retval = xpad_try_sending_next_out_packet(xpad);
 
@@ -1007,6 +1006,20 @@ static void xpadone_ack_mode_report(struct usb_xpad *xpad, u8 seq_num)
 	xpad_try_sending_next_out_packet(xpad);
 
 	spin_unlock_irqrestore(&xpad->odata_lock, flags);
+}
+
+static int xpad_start_xbox_one(struct usb_xpad *xpad)
+{
+	static const u8 xbone_init_pkt0[] = {0x01, 0x20, 0x00, 0x09, 0x00,
+			0x04, 0x20, 0x3a, 0x00, 0x00, 0x00, 0x80, 0x00};
+	static const u8 xbone_init_pkt1[] = {0x05, 0x20, 0x00, 0x01, 0x00};
+	int retval;
+
+	retval = xpadone_send_init_pkt(xpad, xbone_init_pkt0, sizeof(xbone_init_pkt0));
+	if (retval)
+		return retval;
+
+	return xpadone_send_init_pkt(xpad, xbone_init_pkt1, sizeof(xbone_init_pkt1));
 }
 
 #ifdef CONFIG_JOYSTICK_XPAD_FF
