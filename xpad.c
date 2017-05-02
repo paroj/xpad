@@ -163,6 +163,8 @@ static const struct xpad_device {
 	{ 0x0738, 0x6040, "Mad Catz Beat Pad Pro", MAP_DPAD_TO_BUTTONS, XTYPE_XBOX },
 	{ 0x0738, 0xb726, "Mad Catz Xbox controller - MW2", 0, XTYPE_XBOX360 },
 	{ 0x0738, 0xbeef, "Mad Catz JOYTECH NEO SE Advanced GamePad", XTYPE_XBOX360 },
+	{ 0x0738, 0x4503, "Mad Catz steering wheel", 0, XTYPE_XBOXONE },
+
 	{ 0x0738, 0xcb02, "Saitek Cyborg Rumble Pad - PC/Xbox 360", 0, XTYPE_XBOX360 },
 	{ 0x0738, 0xcb03, "Saitek P3200 Rumble Pad - PC/Xbox 360", 0, XTYPE_XBOX360 },
 	{ 0x0738, 0xf738, "Super SFIV FightStick TE S", 0, XTYPE_XBOX360 },
@@ -231,7 +233,7 @@ static const struct xpad_device {
 	{ 0x24c6, 0x5b03, "Thrustmaster Ferrari 458 Racing Wheel", 0, XTYPE_XBOX360 },
 	{ 0x1532, 0x0a03, "Razer Wildcat for Xbox One", 0, XTYPE_XBOXONE },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
-	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
+	{ 0x0000, 0x0000, "Generic X-Box One pad", 0, XTYPE_XBOXONE }
 };
 
 /* buttons shared with xbox and xbox360 */
@@ -676,28 +678,28 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
 		/* left stick */
 		input_report_abs(dev, ABS_X,
-				 (__s16) le16_to_cpup((__le16 *)(data + 10)));
+				(__u16) (le16_to_cpup((__le16 *)(data + 10))));
 		input_report_abs(dev, ABS_Y,
-				 ~(__s16) le16_to_cpup((__le16 *)(data + 12)));
+				 ~(__s16) (le16_to_cpup((__le16 *)(data + 12))));
 
 		/* right stick */
 		input_report_abs(dev, ABS_RX,
-				 (__s16) le16_to_cpup((__le16 *)(data + 14)));
+				 (__s16) (le16_to_cpup((__le16 *)(data + 14)))/64);
 		input_report_abs(dev, ABS_RY,
-				 ~(__s16) le16_to_cpup((__le16 *)(data + 16)));
+				 ~(__s16) (le16_to_cpup((__le16 *)(data + 16)))/64);
 	}
 
 	/* triggers left/right */
 	if (xpad->mapping & MAP_TRIGGERS_TO_BUTTONS) {
 		input_report_key(dev, BTN_TL2,
-				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
+				 (__u16) (le16_to_cpup((__le16 *)(data + 6)))/64);
 		input_report_key(dev, BTN_TR2,
-				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
+				 (__u16) (le16_to_cpup((__le16 *)(data + 8)))/64);
 	} else {
 		input_report_abs(dev, ABS_Z,
-				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
+				 (__u16) (le16_to_cpup((__le16 *)(data + 6)))/64);
 		input_report_abs(dev, ABS_RZ,
-				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
+				 (__u16) (le16_to_cpup((__le16 *)(data + 8)))/64);
 	}
 
 	input_sync(dev);
