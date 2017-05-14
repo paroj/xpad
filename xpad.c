@@ -75,6 +75,7 @@
  * Later changes can be tracked in SCM.
  */
 #define DEBUG
+#define DEBUG_VERBOSE
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/rcupdate.h>
@@ -96,6 +97,7 @@
 #define MAP_STICKS_TO_NULL		(1 << 2)
 #define DANCEPAD_MAP_CONFIG	(MAP_DPAD_TO_BUTTONS |			\
 				MAP_TRIGGERS_TO_BUTTONS | MAP_STICKS_TO_NULL)
+#define MAP_WHEEL			(1 << 3)
 
 #define XTYPE_XBOX        0
 #define XTYPE_XBOX360     1
@@ -231,6 +233,8 @@ static const struct xpad_device {
 	{ 0x24c6, 0x5b03, "Thrustmaster Ferrari 458 Racing Wheel", 0, XTYPE_XBOX360 },
 	{ 0x1532, 0x0a03, "Razer Wildcat for Xbox One", 0, XTYPE_XBOXONE },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
+	{ 0x0738, 0x4503, "Mad Catz Pro Racing Force Feedback Wheel & Pedals (Xbox One)", MAP_WHEEL, XTYPE_XBOXONE },
+
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
 };
 
@@ -674,6 +678,10 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	input_report_key(dev, BTN_THUMBR, data[5] & 0x80);
 
 	if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
+		if (xpad->mapping & MAP_WHEEL) {
+			input_report_abs(dev, ABS_X,
+				 (__u16) le16_to_cpup((__le16 *)(data + 10)));
+		} else {
 		/* left stick */
 		input_report_abs(dev, ABS_X,
 				 (__s16) le16_to_cpup((__le16 *)(data + 10)));
@@ -685,6 +693,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				 (__s16) le16_to_cpup((__le16 *)(data + 14)));
 		input_report_abs(dev, ABS_RY,
 				 ~(__s16) le16_to_cpup((__le16 *)(data + 16)));
+		}
 	}
 
 	/* triggers left/right */
@@ -1379,7 +1388,9 @@ static void xpad_set_up_abs(struct input_dev *input_dev, signed short abs)
 		break;
 	case ABS_Z:
 	case ABS_RZ:	/* the triggers (if mapped to axes) */
-		if (xpad->xtype == XTYPE_XBOXONE)
+		if (xpad->mapping & MAP_WHEEL)
+			input_set_abs_params(input_dev, abs, 0, 65535, 16, 128);
+		else if (xpad->xtype == XTYPE_XBOXONE)
 			input_set_abs_params(input_dev, abs, 0, 1023, 0, 0);
 		else
 			input_set_abs_params(input_dev, abs, 0, 255, 0, 0);

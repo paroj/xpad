@@ -1,3 +1,7 @@
+Only for Mad Cats Steering Wheel xbox one
+
+
+
 # Updated Xpad Linux Kernel Driver
 Driver for the Xbox/ Xbox 360/ Xbox 360 Wireless/ Xbox One Controllers
 
@@ -8,7 +12,7 @@ This driver includes the latest changes in the upstream linux kernel and additio
 
 # Installing
 ```
-sudo git clone https://github.com/paroj/xpad.git /usr/src/xpad-0.4
+sudo git clone https://github.com/hidemune/xpad.git /usr/src/xpad-0.4
 sudo dkms install -m xpad -v 0.4
 ```
 # Updating
