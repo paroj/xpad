@@ -8,7 +8,7 @@ This driver includes the latest changes in the upstream linux kernel and additio
 
 # Installing
 ```
-sudo git clone https://github.com/paroj/xpad.git /usr/src/xpad-0.4
+sudo git clone https://github.com/hidemune/xpad.git /usr/src/xpad-0.4
 sudo dkms install -m xpad -v 0.4
 ```
 # Updating
