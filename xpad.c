@@ -97,13 +97,13 @@
 #define MAP_STICKS_TO_NULL		(1 << 2)
 #define DANCEPAD_MAP_CONFIG	(MAP_DPAD_TO_BUTTONS |			\
 				MAP_TRIGGERS_TO_BUTTONS | MAP_STICKS_TO_NULL)
+#define MAP_WHEEL			(1 << 3)
 
 #define XTYPE_XBOX        0
 #define XTYPE_XBOX360     1
 #define XTYPE_XBOX360W    2
 #define XTYPE_XBOXONE     3
-#define XTYPE_XBOXONEWHL  4
-#define XTYPE_UNKNOWN     5
+#define XTYPE_UNKNOWN     4
 
 static bool dpad_to_buttons;
 module_param(dpad_to_buttons, bool, S_IRUGO);
@@ -233,7 +233,7 @@ static const struct xpad_device {
 	{ 0x24c6, 0x5b03, "Thrustmaster Ferrari 458 Racing Wheel", 0, XTYPE_XBOX360 },
 	{ 0x1532, 0x0a03, "Razer Wildcat for Xbox One", 0, XTYPE_XBOXONE },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
-	{ 0x0738, 0x4503, "Mad Catz Pro Racing Force Feedback Wheel & Pedals (Xbox One)", 0, XTYPE_XBOXONEWHL },
+	{ 0x0738, 0x4503, "Mad Catz Pro Racing Force Feedback Wheel & Pedals (Xbox One)", MAP_WHEEL, XTYPE_XBOXONE },
 
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
 };
@@ -678,6 +678,10 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	input_report_key(dev, BTN_THUMBR, data[5] & 0x80);
 
 	if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
+		if (xpad->mapping & MAP_WHEEL) {
+			input_report_abs(dev, ABS_X,
+				 (__u16) le16_to_cpup((__le16 *)(data + 10)));
+		} else {
 		/* left stick */
 		input_report_abs(dev, ABS_X,
 				 (__s16) le16_to_cpup((__le16 *)(data + 10)));
@@ -689,6 +693,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				 (__s16) le16_to_cpup((__le16 *)(data + 14)));
 		input_report_abs(dev, ABS_RY,
 				 ~(__s16) le16_to_cpup((__le16 *)(data + 16)));
+		}
 	}
 
 	/* triggers left/right */
@@ -703,61 +708,6 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 		input_report_abs(dev, ABS_RZ,
 				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
 	}
-
-	input_sync(dev);
-}
-
-static void xpadonewheel_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char *data)
-{
-	struct input_dev *dev = xpad->dev;
-
-	/* the xbox button has its own special report */
-	if (data[0] == 0X07) {
-		/*
-		 * The Xbox One S controller requires these reports to be
-		 * acked otherwise it continues sending them forever and
-		 * won't report further mode button events.
-		 */
-		if (data[1] == 0x30)
-			xpadone_ack_mode_report(xpad, data[2]);
-
-		input_report_key(dev, BTN_MODE, data[4] & 0x01);
-		input_sync(dev);
-		return;
-	}
-	/* check invalid packet */
-	else if (data[0] != 0X20)
-		return;
-
-	/* menu/view buttons */
-	input_report_key(dev, BTN_START,  data[4] & 0x04);
-	input_report_key(dev, BTN_SELECT, data[4] & 0x08);
-
-	/* buttons A,B,X,Y */
-	input_report_key(dev, BTN_A,	data[4] & 0x10);
-	input_report_key(dev, BTN_B,	data[4] & 0x20);
-	input_report_key(dev, BTN_X,	data[4] & 0x40);
-	input_report_key(dev, BTN_Y,	data[4] & 0x80);
-
-	/* digital pad */
-		input_report_abs(dev, ABS_HAT0X,
-				 !!(data[5] & 0x08) - !!(data[5] & 0x04));
-		input_report_abs(dev, ABS_HAT0Y,
-				 !!(data[5] & 0x02) - !!(data[5] & 0x01));
-
-	/* TL/TR */
-	input_report_key(dev, BTN_TL,	data[5] & 0x10);
-	input_report_key(dev, BTN_TR,	data[5] & 0x20);
-
-	/* Wheel 0000 - *xx7f* - ffff */
-	input_report_abs(dev, ABS_X,
-			(__s16) (le16_to_cpup((__le16 *)(data + 6))-32768));
-
-	/* Pedal *0000* - FFFF */
-	input_report_abs(dev, ABS_RX,
-			 (__s16) (le16_to_cpup((__le16 *)(data + 8))-32768));
-	input_report_abs(dev, ABS_RY,
-			 (__s16) (le16_to_cpup((__le16 *)(data + 10))-32768));
 
 	input_sync(dev);
 }
@@ -803,9 +753,6 @@ static void xpad_irq_in(struct urb *urb)
 		break;
 	case XTYPE_XBOXONE:
 		xpadone_process_packet(xpad, 0, xpad->idata);
-		break;
-	case XTYPE_XBOXONEWHL:
-		xpadonewheel_process_packet(xpad, 0, xpad->idata);
 		break;
 	default:
 		xpad_process_packet(xpad, 0, xpad->idata);
@@ -1132,7 +1079,6 @@ static int xpad_play_effect(struct input_dev *dev, void *data, struct ff_effect 
 		break;
 
 	case XTYPE_XBOXONE:
-	case XTYPE_XBOXONEWHL:
 		packet->data[0] = 0x09; /* activate rumble */
 		packet->data[1] = 0x00;
 		packet->data[2] = xpad->odata_serial++;
@@ -1336,7 +1282,7 @@ static int xpad_start_input(struct usb_xpad *xpad)
 	if (usb_submit_urb(xpad->irq_in, GFP_KERNEL))
 		return -EIO;
 
-	if ((xpad->xtype == XTYPE_XBOXONE) || (xpad->xtype == XTYPE_XBOXONEWHL)) {
+	if (xpad->xtype == XTYPE_XBOXONE) {
 		error = xpad_start_xbox_one(xpad);
 		if (error) {
 			usb_kill_urb(xpad->irq_in);
@@ -1442,7 +1388,9 @@ static void xpad_set_up_abs(struct input_dev *input_dev, signed short abs)
 		break;
 	case ABS_Z:
 	case ABS_RZ:	/* the triggers (if mapped to axes) */
-		if ((xpad->xtype == XTYPE_XBOXONE) || (xpad->xtype == XTYPE_XBOXONEWHL))
+		if (xpad->mapping & MAP_WHEEL)
+			input_set_abs_params(input_dev, abs, 0, 65535, 16, 128);
+		else if (xpad->xtype == XTYPE_XBOXONE)
 			input_set_abs_params(input_dev, abs, 0, 1023, 0, 0);
 		else
 			input_set_abs_params(input_dev, abs, 0, 255, 0, 0);
@@ -1506,7 +1454,7 @@ static int xpad_init_input(struct usb_xpad *xpad)
 
 	/* set up model-specific ones */
 	if (xpad->xtype == XTYPE_XBOX360 || xpad->xtype == XTYPE_XBOX360W ||
-	    xpad->xtype == XTYPE_XBOXONE || xpad->xtype == XTYPE_XBOXONEWHL) {
+	    xpad->xtype == XTYPE_XBOXONE) {
 		for (i = 0; xpad360_btn[i] >= 0; i++)
 			__set_bit(xpad360_btn[i], input_dev->keybit);
 	} else {
@@ -1626,7 +1574,7 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 			xpad->mapping |= MAP_STICKS_TO_NULL;
 	}
 
-	if ((xpad->xtype == XTYPE_XBOXONE || xpad->xtype == XTYPE_XBOXONEWHL) &&
+	if (xpad->xtype == XTYPE_XBOXONE &&
 	    intf->cur_altsetting->desc.bInterfaceNumber != 0) {
 		/*
 		 * The Xbox One controller lists three interfaces all with the
@@ -1775,7 +1723,7 @@ static int xpad_resume(struct usb_interface *intf)
 		mutex_lock(&input->mutex);
 		if (input->users) {
 			retval = xpad_start_input(xpad);
-		} else if (xpad->xtype == XTYPE_XBOXONE || xpad->xtype == XTYPE_XBOXONEWHL) {
+		} else if (xpad->xtype == XTYPE_XBOXONE) {
 			/*
 			 * Even if there are no users, we'll send Xbox One pads
 			 * the startup sequence so they don't sit there and
