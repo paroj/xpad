@@ -75,7 +75,6 @@
  * Later changes can be tracked in SCM.
  */
 #define DEBUG
-#define DEBUG_VERBOSE
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/rcupdate.h>
@@ -149,6 +148,7 @@ static const struct xpad_device {
 	{ 0x046d, 0xca88, "Logitech Compact Controller for Xbox", 0, XTYPE_XBOX },
 	{ 0x05fd, 0x1007, "Mad Catz Controller (unverified)", 0, XTYPE_XBOX },
 	{ 0x05fd, 0x107a, "InterAct 'PowerPad Pro' X-Box pad (Germany)", 0, XTYPE_XBOX },
+	{ 0x0738, 0x4503, "Mad Catz Pro Racing Force Feedback Wheel & Pedals (Xbox One)", MAP_WHEEL, XTYPE_XBOXONE },
 	{ 0x0738, 0x4516, "Mad Catz Control Pad", 0, XTYPE_XBOX },
 	{ 0x0738, 0x4522, "Mad Catz LumiCON", 0, XTYPE_XBOX },
 	{ 0x0738, 0x4526, "Mad Catz Control Pad Pro", 0, XTYPE_XBOX },
@@ -233,8 +233,6 @@ static const struct xpad_device {
 	{ 0x24c6, 0x5b03, "Thrustmaster Ferrari 458 Racing Wheel", 0, XTYPE_XBOX360 },
 	{ 0x1532, 0x0a03, "Razer Wildcat for Xbox One", 0, XTYPE_XBOXONE },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
-	{ 0x0738, 0x4503, "Mad Catz Pro Racing Force Feedback Wheel & Pedals (Xbox One)", MAP_WHEEL, XTYPE_XBOXONE },
-
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
 };
 
@@ -1389,6 +1387,11 @@ static void xpad_set_up_abs(struct input_dev *input_dev, signed short abs)
 	case ABS_Z:
 	case ABS_RZ:	/* the triggers (if mapped to axes) */
 		if (xpad->mapping & MAP_WHEEL)
+/* MAP_WHEEL
+wheel - ABS_Z (data + 6) / (0, center at 32768, 65535)
+brake - ABS_X (data + 10) / (0 to 65535)
+gas - ABS_RZ (data + 8) / (0 to 65535)
+*/
 			input_set_abs_params(input_dev, abs, 0, 65535, 16, 128);
 		else if (xpad->xtype == XTYPE_XBOXONE)
 			input_set_abs_params(input_dev, abs, 0, 1023, 0, 0);

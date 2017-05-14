@@ -1,7 +1,3 @@
-Only for Mad Cats Steering Wheel xbox one
-
-
-
 # Updated Xpad Linux Kernel Driver
 Driver for the Xbox/ Xbox 360/ Xbox 360 Wireless/ Xbox One Controllers
 
