@@ -678,7 +678,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
 		if (xpad->mapping & MAP_WHEEL) {
 			input_report_abs(dev, ABS_X,
-				 (__u16) le16_to_cpup((__le16 *)(data + 10)));
+				 (__u16) le16_to_cpup((__le16 *)(data + 6))-32768);
 		} else {
 		/* left stick */
 		input_report_abs(dev, ABS_X,
@@ -695,6 +695,12 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	}
 
 	/* triggers left/right */
+	if (xpad->mapping & MAP_WHEEL) {
+		input_report_abs(dev, ABS_RZ,
+				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
+		input_report_abs(dev, ABS_Z,
+				 (__u16) le16_to_cpup((__le16 *)(data + 10)));
+	} else {
 	if (xpad->mapping & MAP_TRIGGERS_TO_BUTTONS) {
 		input_report_key(dev, BTN_TL2,
 				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
@@ -705,6 +711,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
 		input_report_abs(dev, ABS_RZ,
 				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
+	}
 	}
 
 	input_sync(dev);
@@ -1388,9 +1395,9 @@ static void xpad_set_up_abs(struct input_dev *input_dev, signed short abs)
 	case ABS_RZ:	/* the triggers (if mapped to axes) */
 		if (xpad->mapping & MAP_WHEEL)
 /* MAP_WHEEL
-wheel - ABS_Z (data + 6) / (0, center at 32768, 65535)
-brake - ABS_X (data + 10) / (0 to 65535)
-gas - ABS_RZ (data + 8) / (0 to 65535)
+wheel - ABS_X  (data + 6)  / (0, center at 32768, 65535)   > -32767, Center0, 32767
+brake - ABS_Z  (data + 10) / (0 to 65535)                  > -32767 to 32767
+gas   - ABS_RZ (data + 8)  / (0 to 65535)                  > -32767 to 32767
 */
 			input_set_abs_params(input_dev, abs, 0, 65535, 16, 128);
 		else if (xpad->xtype == XTYPE_XBOXONE)
