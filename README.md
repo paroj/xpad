@@ -12,6 +12,7 @@ sudo git clone https://github.com/paroj/xpad.git /usr/src/xpad-0.4
 sudo dkms install -m xpad -v 0.4
 ```
 (Optional should the controller not still be working, may need to be done again after new boot)
+
 `sudo modprobe xpad`
 
 # Updating
