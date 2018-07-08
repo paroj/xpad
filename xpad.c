@@ -225,7 +225,6 @@ static const struct xpad_device {
 	{0x0e6f, 0x0162, "PDP Xbox One Controller", 0, XTYPE_XBOXONE},
 	{0x0e6f, 0x0163, "PDP Xbox One Controller", 0, XTYPE_XBOXONE},
 	{0x0e6f, 0x02a8, "PDP Xbox One Controller", 0, XTYPE_XBOXONE},
-	{0x0e6f, 0x02a1, "PDP Wired Controller for Xbox One", 0, XTYPE_XBOXONE},
 	{0x0e6f, 0x0164, "PDP Battlefield One", 0, XTYPE_XBOXONE},
 	{0x0e6f, 0x0165, "PDP Titanfall 2", 0, XTYPE_XBOXONE},
 	{0x0e6f, 0x0201, "Pelican PL-3601 'TSZ' Wired Xbox 360 Controller", 0, XTYPE_XBOX360},
@@ -335,7 +334,8 @@ static const struct xpad_device {
 	{0x24c6, 0xfafe, "Rock Candy Gamepad for Xbox 360", 0, XTYPE_XBOX360},
 	{0x3767, 0x0101, "Fanatec Speedster 3 Forceshock Wheel", 0, XTYPE_XBOX},
 	{0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX},
-	{0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN}};
+	{0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN},
+	{0x0e6f, 0x02a1, "PDP Wired Controller for Xbox One", 0, XTYPE_XBOXONE}};
 
 /* buttons shared with xbox and xbox360 */
 static const signed short xpad_common_btn[] = {
