@@ -335,6 +335,7 @@ static const struct xpad_device {
 	{ 0x3767, 0x0101, "Fanatec Speedster 3 Forceshock Wheel", 0, XTYPE_XBOX },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
+	{ 0x0e6f, 0x02a1, "PDP Wired Controller for Xbox One", 0, XTYPE_XBOXONE },
 };
 
 /* buttons shared with xbox and xbox360 */
@@ -538,6 +539,8 @@ static const struct xboxone_init_packet xboxone_init_packets[] = {
 	XBOXONE_INIT_PKT(0x0e6f, 0x02a6, xboxone_pdp_init2),
 	XBOXONE_INIT_PKT(0x0e6f, 0x02a8, xboxone_pdp_init1),
 	XBOXONE_INIT_PKT(0x0e6f, 0x02a8, xboxone_pdp_init2),
+	XBOXONE_INIT_PKT(0x0e6f, 0x02a1, xboxone_pdp_init1),
+	XBOXONE_INIT_PKT(0x0e6f, 0x02a1, xboxone_pdp_init2),
 	XBOXONE_INIT_PKT(0x24c6, 0x541a, xboxone_rumblebegin_init),
 	XBOXONE_INIT_PKT(0x24c6, 0x542a, xboxone_rumblebegin_init),
 	XBOXONE_INIT_PKT(0x24c6, 0x543a, xboxone_rumblebegin_init),
