@@ -6,6 +6,10 @@ This driver includes the latest changes in the upstream linux kernel and additio
 * enable debug outputs to ease resolving issues
 * some minor code refactoring improving readability 
 
+
+**This driver does not support the XBox One Wireless Adapter (WiFi)**  
+To get that running, see: [medusalix/xow](https://github.com/medusalix/xow)
+
 # Installing
 ```
 sudo git clone https://github.com/paroj/xpad.git /usr/src/xpad-0.4
