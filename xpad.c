@@ -1244,6 +1244,94 @@ static int xpad_start_xbox_one(struct usb_xpad *xpad)
 	return retval;
 }
 
+static int xpad_start_xbox_360(struct usb_xpad *xpad)
+{
+	int status;
+
+	char *data = kzalloc(20, GFP_KERNEL);
+
+	int TIMEOUT = 100;
+
+	/*
+	this init sequence is needed for the gamesir g3w controller
+	and for shanwan controllers in xpad mode.
+	Unfortunately, in this mode they identify as 0x045e, 0x028e, so we
+	have to inspect the manufacturer string.
+	Sending this sequence to other controllers will break initialization.
+	*/
+	bool is_shanwan = strcasecmp("shanwan", xpad->udev->manufacturer) == 0;
+	if ((xpad->dev->id.vendor != 0x05ac ||
+	     xpad->dev->id.product != 0x055b) &&
+	    !is_shanwan) {
+		status = 0;
+		goto err_free_ctrl_data;
+	}
+
+	status = usb_control_msg(xpad->udev,
+		usb_rcvctrlpipe(xpad->udev, 0),
+		0x1, 0xc1,
+		cpu_to_le16(0x100), cpu_to_le16(0x0), data, cpu_to_le16(20),
+		TIMEOUT);
+
+#ifdef DEBUG
+	dev_dbg(&xpad->intf->dev,
+		"%s - control message 1 returned %d\n", __func__, status);
+#endif
+
+	if (status < 0) {
+		goto err_free_ctrl_data;
+	}
+#ifdef DEBUG
+	else {
+		print_hex_dump(KERN_DEBUG, "xpad-dbg: ", DUMP_PREFIX_OFFSET, 32, 1, data, 20, 0);
+	}
+#endif
+
+	status = usb_control_msg(xpad->udev,
+		usb_rcvctrlpipe(xpad->udev, 0),
+		0x1, 0xc1,
+		cpu_to_le16(0x0), cpu_to_le16(0x0), data, cpu_to_le16(8),
+		TIMEOUT);
+#ifdef DEBUG
+	dev_dbg(&xpad->intf->dev,
+		"%s - control message 2 returned %d\n", __func__, status);
+#endif
+
+	if (status < 0) {
+		goto err_free_ctrl_data;
+	}
+#ifdef DEBUG
+	else {
+		print_hex_dump(KERN_DEBUG, "xpad-dbg: ", DUMP_PREFIX_OFFSET, 32, 1, data, 8, 0);
+	}
+#endif
+
+	status = usb_control_msg(xpad->udev,
+		usb_rcvctrlpipe(xpad->udev, 0),
+		0x1, 0xc0,
+		cpu_to_le16(0x0), cpu_to_le16(0x0), data, cpu_to_le16(4),
+		TIMEOUT);
+#ifdef DEBUG
+	dev_dbg(&xpad->intf->dev,
+		"%s - control message 3 returned %d\n", __func__, status);
+#endif
+
+	if (status < 0) {
+		goto err_free_ctrl_data;
+	}
+#ifdef DEBUG
+	else {
+		print_hex_dump(KERN_DEBUG, "xpad-dbg: ", DUMP_PREFIX_OFFSET, 32, 1, data, 4, 0);
+	}
+#endif
+
+	status = 0;
+
+err_free_ctrl_data:
+	kfree(data);
+	return status;
+}
+
 static void xpadone_ack_mode_report(struct usb_xpad *xpad, u8 seq_num)
 {
 	unsigned long flags;
@@ -1528,6 +1616,12 @@ static void xpad_led_disconnect(struct usb_xpad *xpad) { }
 static int xpad_start_input(struct usb_xpad *xpad)
 {
 	int error;
+
+	if (xpad->xtype == XTYPE_XBOX360) {
+		error = xpad_start_xbox_360(xpad);
+		if (error)
+			return error;
+	}
 
 	if (usb_submit_urb(xpad->irq_in, GFP_KERNEL))
 		return -EIO;
