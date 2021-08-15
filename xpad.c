@@ -541,6 +541,20 @@ static const u8 xboxone_s_init[] = {
 };
 
 /*
+ * This packet is required for some zeroplus pads (0x045e:0x02ea)
+ */
+static const u8 xboxone_zeroplus_init1[] = {
+       0x04, 0x20, 0x01, 0x00
+};
+/*
+ * This packet is required for some zeroplus pads (0x045e:0x02ea)
+ */
+static const u8 xboxone_zeroplus_init2[] = {
+       0x01, 0x20, 0x01, 0x09, 0x00, 0x1e, 0x20, 0x10,
+       0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+/*
  * This packet is required to get additional input data
  * from Xbox One Elite Series 2 (0x045e:0x0b00) pads.
  * We mostly do this right now to get paddle data
@@ -608,6 +622,8 @@ static const struct xboxone_init_packet xboxone_init_packets[] = {
 	XBOXONE_INIT_PKT(0x0f0d, 0x0067, xboxone_hori_init),
 	XBOXONE_INIT_PKT(0x0000, 0x0000, xboxone_fw2015_init),
 	XBOXONE_INIT_PKT(0x045e, 0x02ea, xboxone_s_init),
+    XBOXONE_INIT_PKT(0x045e, 0x02ea, xboxone_zeroplus_init1),
+    XBOXONE_INIT_PKT(0x045e, 0x02ea, xboxone_zeroplus_init2),
 	XBOXONE_INIT_PKT(0x045e, 0x0b00, xboxone_s_init),
 	XBOXONE_INIT_PKT(0x045e, 0x0b00, extra_input_packet_init),
 	XBOXONE_INIT_PKT(0x0e6f, 0x0000, xboxone_pdp_init1),
