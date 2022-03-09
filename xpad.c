@@ -61,6 +61,7 @@
  * Later changes can be tracked in SCM.
  */
 // #define DEBUG
+// #define DEBUG_VERBOSE
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/rcupdate.h>
@@ -348,6 +349,7 @@ static const struct xpad_device {
 static const signed short xpad_common_btn[] = {
 	BTN_A, BTN_B, BTN_X, BTN_Y,			/* "analog" buttons */
 	BTN_START, BTN_SELECT, BTN_THUMBL, BTN_THUMBR,	/* start/back/sticks */
+	BTN_0, BTN_1, BTN_2, BTN_3, /* elite paddles */
 	-1						/* terminating entry */
 };
 
@@ -902,6 +904,12 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	input_report_key(dev, BTN_B,	data[4] & 0x20);
 	input_report_key(dev, BTN_X,	data[4] & 0x40);
 	input_report_key(dev, BTN_Y,	data[4] & 0x80);
+
+	/* elite paddles */
+	input_report_key(dev, BTN_0,	data[18] & 0x04);
+	input_report_key(dev, BTN_1,	data[18] & 0x08);
+	input_report_key(dev, BTN_2,	data[18] & 0x01);
+	input_report_key(dev, BTN_3,	data[18] & 0x02);
 
 	/* digital pad */
 	if (xpad->mapping & MAP_DPAD_TO_BUTTONS) {
