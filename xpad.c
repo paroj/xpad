@@ -80,6 +80,7 @@
 #define MAP_TRIGGERS_TO_BUTTONS		(1 << 1)
 #define MAP_STICKS_TO_NULL		(1 << 2)
 #define MAP_SELECT_BUTTON		(1 << 3)
+#define MAP_PADDLES				(1 << 4)
 #define DANCEPAD_MAP_CONFIG	(MAP_DPAD_TO_BUTTONS |			\
 				MAP_TRIGGERS_TO_BUTTONS | MAP_STICKS_TO_NULL)
 
@@ -128,7 +129,8 @@ static const struct xpad_device {
 	{ 0x045e, 0x0291, "Xbox 360 Wireless Receiver (XBOX)", MAP_DPAD_TO_BUTTONS, XTYPE_XBOX360W },
 	{ 0x045e, 0x02d1, "Microsoft X-Box One pad", 0, XTYPE_XBOXONE },
 	{ 0x045e, 0x02dd, "Microsoft X-Box One pad (Firmware 2015)", 0, XTYPE_XBOXONE },
-	{ 0x045e, 0x02e3, "Microsoft X-Box One Elite pad", 0, XTYPE_XBOXONE },
+	{ 0x045e, 0x02e3, "Microsoft X-Box One Elite pad", MAP_PADDLES, XTYPE_XBOXONE },
+	{ 0x045e, 0x0b00, "Microsoft X-Box One Elite 2 pad", MAP_PADDLES, XTYPE_XBOXONE },
 	{ 0x045e, 0x02ea, "Microsoft X-Box One S pad", 0, XTYPE_XBOXONE },
 	{ 0x045e, 0x0719, "Xbox 360 Wireless Receiver", MAP_DPAD_TO_BUTTONS, XTYPE_XBOX360W },
 	{ 0x045e, 0x0b12, "Microsoft Xbox One X pad", MAP_SELECT_BUTTON, XTYPE_XBOXONE },
@@ -348,7 +350,6 @@ static const struct xpad_device {
 static const signed short xpad_common_btn[] = {
 	BTN_A, BTN_B, BTN_X, BTN_Y,			/* "analog" buttons */
 	BTN_START, BTN_SELECT, BTN_THUMBL, BTN_THUMBR,	/* start/back/sticks */
-	BTN_TRIGGER_HAPPY5, BTN_TRIGGER_HAPPY6, BTN_TRIGGER_HAPPY7, BTN_TRIGGER_HAPPY8, /* elite paddles */
 	-1						/* terminating entry */
 };
 
@@ -393,6 +394,13 @@ static const signed short xpad_abs_pad[] = {
 static const signed short xpad_abs_triggers[] = {
 	ABS_Z, ABS_RZ,		/* triggers left/right */
 	-1
+};
+
+/* used when the controller has extra paddle buttons */
+static const signed short xpad_btn_paddles[] = {
+	BTN_TRIGGER_HAPPY5, BTN_TRIGGER_HAPPY6, /* paddle upper left, lower left */
+	BTN_TRIGGER_HAPPY7, BTN_TRIGGER_HAPPY8, /* paddle upper right, lower right */
+	-1						/* terminating entry */
 };
 
 /*
@@ -904,12 +912,6 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	input_report_key(dev, BTN_X,	data[4] & 0x40);
 	input_report_key(dev, BTN_Y,	data[4] & 0x80);
 
-	/* elite paddles */
-	input_report_key(dev, BTN_TRIGGER_HAPPY5,	data[18] & 0x04);
-	input_report_key(dev, BTN_TRIGGER_HAPPY6,	data[18] & 0x08);
-	input_report_key(dev, BTN_TRIGGER_HAPPY7,	data[18] & 0x01);
-	input_report_key(dev, BTN_TRIGGER_HAPPY8,	data[18] & 0x02);
-
 	/* digital pad */
 	if (xpad->mapping & MAP_DPAD_TO_BUTTONS) {
 		/* dpad as buttons (left, right, up, down) */
@@ -957,6 +959,36 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
 		input_report_abs(dev, ABS_RZ,
 				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
+	}
+
+	/* paddle handling */
+	/* based on SDL's SDL_hidapi_xboxone.c */
+	if (xpad->mapping & MAP_PADDLES) {
+		/* HACK: Paddle data is delivered differently for different models/firmwares. There's probably a better way to detect this... */
+		if (xpad->name == "Microsoft X-Box One Elite pad"){
+			/* Mute paddles if controller has a custom mapping applied */
+			/* Checked by comparing the current mapping config against the factory mapping config */
+			if (memcmp(&data[4], &data[18], 2) != 0) {
+				data[32] = 0;
+			}
+			/* OG Elite Series Controller paddle bits */
+			input_report_key(dev, BTN_TRIGGER_HAPPY5, data[32] & 0x01);
+			input_report_key(dev, BTN_TRIGGER_HAPPY6, data[32] & 0x04);
+			input_report_key(dev, BTN_TRIGGER_HAPPY7, data[32] & 0x02);
+			input_report_key(dev, BTN_TRIGGER_HAPPY8, data[32] & 0x08);
+		} else {
+			/* Mute paddles if controller is in a custom profile slot */
+			/* Checked by looking at the active profile slot to verify it's the default slot */
+			if (data[19] != 0) {
+				data[18] = 0;
+			}
+
+			/* Elite Series 2 4.x firmware paddle bits */
+			input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x04);
+			input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x08);
+			input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x01);
+			input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x02);
+		}
 	}
 
 	input_sync(dev);
@@ -1825,6 +1857,12 @@ static int xpad_init_input(struct usb_xpad *xpad)
 		for (i = 0; xpad_btn_pad[i] >= 0; i++)
 			input_set_capability(input_dev, EV_KEY,
 					     xpad_btn_pad[i]);
+	}
+
+	/* set up paddles if the controller has them */
+	if (xpad->mapping & MAP_PADDLES) {
+		for (i = 0; xpad_btn_paddles[i] >= 0; i++)
+			input_set_capability(input_dev, EV_KEY, xpad_btn_paddles[i]);
 	}
 
 	/*
