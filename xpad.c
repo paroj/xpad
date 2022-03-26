@@ -405,8 +405,8 @@ static const signed short xpad_abs_triggers[] = {
 
 /* used when the controller has extra paddle buttons */
 static const signed short xpad_btn_paddles[] = {
-	BTN_TRIGGER_HAPPY5, BTN_TRIGGER_HAPPY6, /* paddle upper left, lower left */
-	BTN_TRIGGER_HAPPY7, BTN_TRIGGER_HAPPY8, /* paddle upper right, lower right */
+	BTN_TRIGGER_HAPPY5, BTN_TRIGGER_HAPPY6, /* paddle upper right, lower right */
+	BTN_TRIGGER_HAPPY7, BTN_TRIGGER_HAPPY8, /* paddle upper left, lower left */
 	-1						/* terminating entry */
 };
 
@@ -924,10 +924,10 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 			}
 
 			/* Elite Series 2 split packet paddle bits */
-			input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x04);
-			input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x08);
-			input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x01);
-			input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x02);
+			input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x01);
+			input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x02);
+			input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x04);
+			input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x08);
 
 			do_sync = true;
 		}
@@ -1003,10 +1003,10 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 					data[32] = 0;
 				}
 				/* OG Elite Series Controller paddle bits */
-				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[32] & 0x01);
-				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[32] & 0x04);
-				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[32] & 0x02);
-				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[32] & 0x08);
+				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[32] & 0x02);
+				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[32] & 0x08);
+				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[32] & 0x01);
+				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[32] & 0x04);
 			} else if (xpad->ptype == PTYPE_ETWOOLD){
 				/* Mute paddles if controller is in a custom profile slot */
 				/* Checked by looking at the active profile slot to verify it's the default slot */
@@ -1015,10 +1015,10 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				}
 
 				/* Elite Series 2 4.x firmware paddle bits */
-				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x04);
-				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x08);
-				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x01);
-				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x02);
+				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x01);
+				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x02);
+				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x04);
+				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x08);
 			} else if (xpad->ptype == PTYPE_ETWO5){
 				/* Mute paddles if controller is in a custom profile slot */
 				/* Checked by looking at the active profile slot to verify it's the default slot */
@@ -1027,10 +1027,10 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				}
 
 				/* Elite Series 2 5.x firmware paddle bits (before the packet was split) */
-				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[22] & 0x04);
-				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[22] & 0x08);
-				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[22] & 0x01);
-				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[22] & 0x02);
+				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[22] & 0x01);
+				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[22] & 0x02);
+				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[22] & 0x04);
+				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[22] & 0x08);
 			}
 		}
 
