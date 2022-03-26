@@ -90,6 +90,12 @@
 #define XTYPE_XBOXONE     3
 #define XTYPE_UNKNOWN     4
 
+#define PTYPE_STD         0
+#define PTYPE_EONE        1
+#define PTYPE_ETWOOLD     2
+#define PTYPE_ETWO5       3
+#define PTYPE_ETWO5DOT11  4
+
 static bool dpad_to_buttons;
 module_param(dpad_to_buttons, bool, S_IRUGO);
 MODULE_PARM_DESC(dpad_to_buttons, "Map D-PAD to buttons rather than axes for unknown pads");
@@ -112,6 +118,7 @@ static const struct xpad_device {
 	char *name;
 	u8 mapping;
 	u8 xtype;
+	u8 ptype;
 } xpad_device[] = {
 	{ 0x0079, 0x18d4, "GPD Win 2 X-Box Controller", 0, XTYPE_XBOX360 },
 	{ 0x044f, 0x0f00, "Thrustmaster Wheel", 0, XTYPE_XBOX },
@@ -634,6 +641,7 @@ struct usb_xpad {
 
 	int mapping;			/* map d-pad to buttons or to axes */
 	int xtype;			/* type of xbox device */
+	int ptype;          /* type of the extended packet */
 	int pad_nr;			/* the order x360 pads were attached */
 	const char *name;		/* name of the device */
 	struct work_struct work;	/* init/remove device from callback */
@@ -891,6 +899,7 @@ static void xpad360w_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned cha
 static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char *data)
 {
 	struct input_dev *dev = xpad->dev;
+	bool do_sync = false;
 
 	/* the xbox button has its own special report */
 	if (data[0] == 0X07) {
@@ -903,105 +912,133 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 			xpadone_ack_mode_report(xpad, data[2]);
 
 		input_report_key(dev, BTN_MODE, data[4] & 0x01);
-		input_sync(dev);
-		return;
-	}
-	/* check invalid packet */
-	else if (data[0] != 0X20)
-		return;
 
-	/* menu/view buttons */
-	input_report_key(dev, BTN_START,  data[4] & 0x04);
-	input_report_key(dev, BTN_SELECT, data[4] & 0x08);
-	if (xpad->mapping & MAP_SELECT_BUTTON)
-		input_report_key(dev, KEY_RECORD, data[22] & 0x01);
-
-	/* buttons A,B,X,Y */
-	input_report_key(dev, BTN_A,	data[4] & 0x10);
-	input_report_key(dev, BTN_B,	data[4] & 0x20);
-	input_report_key(dev, BTN_X,	data[4] & 0x40);
-	input_report_key(dev, BTN_Y,	data[4] & 0x80);
-
-	/* digital pad */
-	if (xpad->mapping & MAP_DPAD_TO_BUTTONS) {
-		/* dpad as buttons (left, right, up, down) */
-		input_report_key(dev, BTN_TRIGGER_HAPPY1, data[5] & 0x04);
-		input_report_key(dev, BTN_TRIGGER_HAPPY2, data[5] & 0x08);
-		input_report_key(dev, BTN_TRIGGER_HAPPY3, data[5] & 0x01);
-		input_report_key(dev, BTN_TRIGGER_HAPPY4, data[5] & 0x02);
-	} else {
-		input_report_abs(dev, ABS_HAT0X,
-				 !!(data[5] & 0x08) - !!(data[5] & 0x04));
-		input_report_abs(dev, ABS_HAT0Y,
-				 !!(data[5] & 0x02) - !!(data[5] & 0x01));
-	}
-
-	/* TL/TR */
-	input_report_key(dev, BTN_TL,	data[5] & 0x10);
-	input_report_key(dev, BTN_TR,	data[5] & 0x20);
-
-	/* stick press left/right */
-	input_report_key(dev, BTN_THUMBL, data[5] & 0x40);
-	input_report_key(dev, BTN_THUMBR, data[5] & 0x80);
-
-	if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
-		/* left stick */
-		input_report_abs(dev, ABS_X,
-				 (__s16) le16_to_cpup((__le16 *)(data + 10)));
-		input_report_abs(dev, ABS_Y,
-				 ~(__s16) le16_to_cpup((__le16 *)(data + 12)));
-
-		/* right stick */
-		input_report_abs(dev, ABS_RX,
-				 (__s16) le16_to_cpup((__le16 *)(data + 14)));
-		input_report_abs(dev, ABS_RY,
-				 ~(__s16) le16_to_cpup((__le16 *)(data + 16)));
-	}
-
-	/* triggers left/right */
-	if (xpad->mapping & MAP_TRIGGERS_TO_BUTTONS) {
-		input_report_key(dev, BTN_TL2,
-				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
-		input_report_key(dev, BTN_TR2,
-				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
-	} else {
-		input_report_abs(dev, ABS_Z,
-				 (__u16) le16_to_cpup((__le16 *)(data + 6)));
-		input_report_abs(dev, ABS_RZ,
-				 (__u16) le16_to_cpup((__le16 *)(data + 8)));
-	}
-
-	/* paddle handling */
-	/* based on SDL's SDL_hidapi_xboxone.c */
-	if (xpad->mapping & MAP_PADDLES) {
-		/* HACK: Paddle data is delivered differently for different models/firmwares. There's probably a better way to detect this... */
-		if (xpad->name == "Microsoft X-Box One Elite pad"){
-			/* Mute paddles if controller has a custom mapping applied */
-			/* Checked by comparing the current mapping config against the factory mapping config */
-			if (memcmp(&data[4], &data[18], 2) != 0) {
-				data[32] = 0;
-			}
-			/* OG Elite Series Controller paddle bits */
-			input_report_key(dev, BTN_TRIGGER_HAPPY5, data[32] & 0x01);
-			input_report_key(dev, BTN_TRIGGER_HAPPY6, data[32] & 0x04);
-			input_report_key(dev, BTN_TRIGGER_HAPPY7, data[32] & 0x02);
-			input_report_key(dev, BTN_TRIGGER_HAPPY8, data[32] & 0x08);
-		} else {
+		do_sync = true;
+	} else if (data[0] == 0X0C) {
+		/* Some packet formats force us to use this separate to poll paddle inputs */
+		if (xpad->ptype == PTYPE_ETWO5DOT11) {
 			/* Mute paddles if controller is in a custom profile slot */
 			/* Checked by looking at the active profile slot to verify it's the default slot */
 			if (data[19] != 0) {
 				data[18] = 0;
 			}
 
-			/* Elite Series 2 4.x firmware paddle bits */
+			/* Elite Series 2 split packet paddle bits */
 			input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x04);
 			input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x08);
 			input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x01);
 			input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x02);
+
+			do_sync = true;
 		}
+	} else if (data[0] == 0X20) { /* The main valid packet type for inputs */
+		/* menu/view buttons */
+		input_report_key(dev, BTN_START,  data[4] & 0x04);
+		input_report_key(dev, BTN_SELECT, data[4] & 0x08);
+		if (xpad->mapping & MAP_SELECT_BUTTON)
+			input_report_key(dev, KEY_RECORD, data[22] & 0x01);
+
+		/* buttons A,B,X,Y */
+		input_report_key(dev, BTN_A,	data[4] & 0x10);
+		input_report_key(dev, BTN_B,	data[4] & 0x20);
+		input_report_key(dev, BTN_X,	data[4] & 0x40);
+		input_report_key(dev, BTN_Y,	data[4] & 0x80);
+
+		/* digital pad */
+		if (xpad->mapping & MAP_DPAD_TO_BUTTONS) {
+			/* dpad as buttons (left, right, up, down) */
+			input_report_key(dev, BTN_TRIGGER_HAPPY1, data[5] & 0x04);
+			input_report_key(dev, BTN_TRIGGER_HAPPY2, data[5] & 0x08);
+			input_report_key(dev, BTN_TRIGGER_HAPPY3, data[5] & 0x01);
+			input_report_key(dev, BTN_TRIGGER_HAPPY4, data[5] & 0x02);
+		} else {
+			input_report_abs(dev, ABS_HAT0X,
+					!!(data[5] & 0x08) - !!(data[5] & 0x04));
+			input_report_abs(dev, ABS_HAT0Y,
+					!!(data[5] & 0x02) - !!(data[5] & 0x01));
+		}
+
+		/* TL/TR */
+		input_report_key(dev, BTN_TL,	data[5] & 0x10);
+		input_report_key(dev, BTN_TR,	data[5] & 0x20);
+
+		/* stick press left/right */
+		input_report_key(dev, BTN_THUMBL, data[5] & 0x40);
+		input_report_key(dev, BTN_THUMBR, data[5] & 0x80);
+
+		if (!(xpad->mapping & MAP_STICKS_TO_NULL)) {
+			/* left stick */
+			input_report_abs(dev, ABS_X,
+					(__s16) le16_to_cpup((__le16 *)(data + 10)));
+			input_report_abs(dev, ABS_Y,
+					~(__s16) le16_to_cpup((__le16 *)(data + 12)));
+
+			/* right stick */
+			input_report_abs(dev, ABS_RX,
+					(__s16) le16_to_cpup((__le16 *)(data + 14)));
+			input_report_abs(dev, ABS_RY,
+					~(__s16) le16_to_cpup((__le16 *)(data + 16)));
+		}
+
+		/* triggers left/right */
+		if (xpad->mapping & MAP_TRIGGERS_TO_BUTTONS) {
+			input_report_key(dev, BTN_TL2,
+					(__u16) le16_to_cpup((__le16 *)(data + 6)));
+			input_report_key(dev, BTN_TR2,
+					(__u16) le16_to_cpup((__le16 *)(data + 8)));
+		} else {
+			input_report_abs(dev, ABS_Z,
+					(__u16) le16_to_cpup((__le16 *)(data + 6)));
+			input_report_abs(dev, ABS_RZ,
+					(__u16) le16_to_cpup((__le16 *)(data + 8)));
+		}
+
+		/* paddle handling */
+		/* based on SDL's SDL_hidapi_xboxone.c */
+		if (xpad->mapping & MAP_PADDLES) {
+			if (xpad->ptype == PTYPE_EONE){
+				/* Mute paddles if controller has a custom mapping applied */
+				/* Checked by comparing the current mapping config against the factory mapping config */
+				if (memcmp(&data[4], &data[18], 2) != 0) {
+					data[32] = 0;
+				}
+				/* OG Elite Series Controller paddle bits */
+				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[32] & 0x01);
+				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[32] & 0x04);
+				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[32] & 0x02);
+				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[32] & 0x08);
+			} else if (xpad->ptype == PTYPE_ETWOOLD){
+				/* Mute paddles if controller is in a custom profile slot */
+				/* Checked by looking at the active profile slot to verify it's the default slot */
+				if (data[19] != 0) {
+					data[18] = 0;
+				}
+
+				/* Elite Series 2 4.x firmware paddle bits */
+				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[18] & 0x04);
+				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x08);
+				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x01);
+				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x02);
+			} else if (xpad->ptype == PTYPE_ETWO5){
+				/* Mute paddles if controller is in a custom profile slot */
+				/* Checked by looking at the active profile slot to verify it's the default slot */
+				if (data[23] != 0) {
+					data[22] = 0;
+				}
+
+				/* Elite Series 2 5.x firmware paddle bits (before the packet was split) */
+				input_report_key(dev, BTN_TRIGGER_HAPPY5, data[22] & 0x04);
+				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[22] & 0x08);
+				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[22] & 0x01);
+				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[22] & 0x02);
+			}
+		}
+
+		do_sync = true;
 	}
 
-	input_sync(dev);
+	if (do_sync)
+		input_sync(dev);
 }
 
 static void xpad_irq_in(struct urb *urb)
@@ -1961,6 +1998,7 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	xpad->mapping = xpad_device[i].mapping;
 	xpad->xtype = xpad_device[i].xtype;
 	xpad->name = xpad_device[i].name;
+	xpad->ptype = PTYPE_STD;
 	INIT_WORK(&xpad->work, xpad_presence_work);
 
 	if (xpad->xtype == XTYPE_UNKNOWN) {
@@ -2025,6 +2063,26 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	xpad->irq_in->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
 	usb_set_intfdata(intf, xpad);
+
+	/* Special packet type detection */
+	if (le16_to_cpu(udev->descriptor.idVendor) == 0x045e) { /* Microsoft controllers */
+		if (le16_to_cpu(udev->descriptor.idProduct) == 0x02e3) { /* Elite 1 controller */
+			/* The original elite controller always uses the oldest type of extended packet */
+			xpad->ptype = PTYPE_EONE;
+		} else if (le16_to_cpu(udev->descriptor.idProduct) == 0x0b00) { /* Elite 2 controller */
+			/* The elite 2 controller has seen multiple packet revisions. These are tied to specific firmware versions */
+			if (le16_to_cpu(udev->descriptor.bcdDevice) < 0x0500) {
+				/* This is the format that the Elite 2 used prior to the BLE update */
+				xpad->ptype = PTYPE_ETWOOLD;
+			} else if (le16_to_cpu(udev->descriptor.bcdDevice) < 0x050b) {
+				/* This is the format that the Elite 2 used prior to the update that split the packet */
+				xpad->ptype = PTYPE_ETWO5;
+			} else {
+				/* The split packet format that was introduced in v5.11 */
+				xpad->ptype = PTYPE_ETWO5DOT11;
+			}
+		}
+	}
 
 	if (xpad->xtype == XTYPE_XBOX360W) {
 		/*
