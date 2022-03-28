@@ -90,11 +90,11 @@
 #define XTYPE_XBOXONE     3
 #define XTYPE_UNKNOWN     4
 
-#define PTYPE_STD         0
-#define PTYPE_EONE        1
-#define PTYPE_ETWOOLD     2
-#define PTYPE_ETWO5       3
-#define PTYPE_ETWO5DOT11  4
+#define PKT_XB              0
+#define PKT_XBE1            1
+#define PKT_XBE2_FW_OLD     2
+#define PKT_XBE2_FW_5_EARLY 3
+#define PKT_XBE2_FW_5_11    4
 
 static bool dpad_to_buttons;
 module_param(dpad_to_buttons, bool, S_IRUGO);
@@ -118,7 +118,7 @@ static const struct xpad_device {
 	char *name;
 	u8 mapping;
 	u8 xtype;
-	u8 ptype;
+	u8 pktType;
 } xpad_device[] = {
 	{ 0x0079, 0x18d4, "GPD Win 2 X-Box Controller", 0, XTYPE_XBOX360 },
 	{ 0x044f, 0x0f00, "Thrustmaster Wheel", 0, XTYPE_XBOX },
@@ -641,7 +641,7 @@ struct usb_xpad {
 
 	int mapping;			/* map d-pad to buttons or to axes */
 	int xtype;			/* type of xbox device */
-	int ptype;          /* type of the extended packet */
+	int pktType;          /* type of the extended packet */
 	int pad_nr;			/* the order x360 pads were attached */
 	const char *name;		/* name of the device */
 	struct work_struct work;	/* init/remove device from callback */
@@ -916,7 +916,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 		do_sync = true;
 	} else if (data[0] == 0X0C) {
 		/* Some packet formats force us to use this separate to poll paddle inputs */
-		if (xpad->ptype == PTYPE_ETWO5DOT11) {
+		if (xpad->pktType == PKT_XBE2_FW_5_11) {
 			/* Mute paddles if controller is in a custom profile slot */
 			/* Checked by looking at the active profile slot to verify it's the default slot */
 			if (data[19] != 0) {
@@ -996,7 +996,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 		/* paddle handling */
 		/* based on SDL's SDL_hidapi_xboxone.c */
 		if (xpad->mapping & MAP_PADDLES) {
-			if (xpad->ptype == PTYPE_EONE){
+			if (xpad->pktType == PKT_XBE1){
 				/* Mute paddles if controller has a custom mapping applied */
 				/* Checked by comparing the current mapping config against the factory mapping config */
 				if (memcmp(&data[4], &data[18], 2) != 0) {
@@ -1007,7 +1007,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[32] & 0x08);
 				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[32] & 0x01);
 				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[32] & 0x04);
-			} else if (xpad->ptype == PTYPE_ETWOOLD){
+			} else if (xpad->pktType == PKT_XBE2_FW_OLD){
 				/* Mute paddles if controller is in a custom profile slot */
 				/* Checked by looking at the active profile slot to verify it's the default slot */
 				if (data[19] != 0) {
@@ -1019,7 +1019,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 				input_report_key(dev, BTN_TRIGGER_HAPPY6, data[18] & 0x02);
 				input_report_key(dev, BTN_TRIGGER_HAPPY7, data[18] & 0x04);
 				input_report_key(dev, BTN_TRIGGER_HAPPY8, data[18] & 0x08);
-			} else if (xpad->ptype == PTYPE_ETWO5){
+			} else if (xpad->pktType == PKT_XBE2_FW_5_EARLY){
 				/* Mute paddles if controller is in a custom profile slot */
 				/* Checked by looking at the active profile slot to verify it's the default slot */
 				if (data[23] != 0) {
@@ -1998,7 +1998,7 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	xpad->mapping = xpad_device[i].mapping;
 	xpad->xtype = xpad_device[i].xtype;
 	xpad->name = xpad_device[i].name;
-	xpad->ptype = PTYPE_STD;
+	xpad->pktType = PKT_XB;
 	INIT_WORK(&xpad->work, xpad_presence_work);
 
 	if (xpad->xtype == XTYPE_UNKNOWN) {
@@ -2064,22 +2064,22 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 
 	usb_set_intfdata(intf, xpad);
 
-	/* Special packet type detection */
+	/* Packet type detection */
 	if (le16_to_cpu(udev->descriptor.idVendor) == 0x045e) { /* Microsoft controllers */
 		if (le16_to_cpu(udev->descriptor.idProduct) == 0x02e3) { /* Elite 1 controller */
 			/* The original elite controller always uses the oldest type of extended packet */
-			xpad->ptype = PTYPE_EONE;
+			xpad->pktType = PKT_XBE1;
 		} else if (le16_to_cpu(udev->descriptor.idProduct) == 0x0b00) { /* Elite 2 controller */
 			/* The elite 2 controller has seen multiple packet revisions. These are tied to specific firmware versions */
 			if (le16_to_cpu(udev->descriptor.bcdDevice) < 0x0500) {
 				/* This is the format that the Elite 2 used prior to the BLE update */
-				xpad->ptype = PTYPE_ETWOOLD;
+				xpad->pktType = PKT_XBE2_FW_OLD;
 			} else if (le16_to_cpu(udev->descriptor.bcdDevice) < 0x050b) {
 				/* This is the format that the Elite 2 used prior to the update that split the packet */
-				xpad->ptype = PTYPE_ETWO5;
+				xpad->pktType = PKT_XBE2_FW_5_EARLY;
 			} else {
 				/* The split packet format that was introduced in v5.11 */
-				xpad->ptype = PTYPE_ETWO5DOT11;
+				xpad->pktType = PKT_XBE2_FW_5_11;
 			}
 		}
 	}
