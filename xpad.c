@@ -1379,7 +1379,7 @@ static int xpad_start_xbox_360(struct usb_xpad *xpad)
 	status = usb_control_msg(xpad->udev,
 		usb_rcvctrlpipe(xpad->udev, 0),
 		0x1, 0xc1,
-		cpu_to_le16(0x100), cpu_to_le16(0x0), data, cpu_to_le16(20),
+		cpu_to_le16(0x100), cpu_to_le16(0x0), data, cpu_to_le16(14),
 		TIMEOUT);
 
 #ifdef DEBUG
