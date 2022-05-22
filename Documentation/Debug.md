@@ -3,11 +3,15 @@
 *The following instructions can be done as* <br>
 *a regular user without admin privileges.*
 
+<br>
+
 1. Display the kernel log in the console:
 
     ```sh
     dmesg --level=debug --follow
     ```
+    
+    <br>
 
 2. In a new terminal access the device with `jstest` :
 
@@ -18,6 +22,8 @@
     ```sh
     jstest /dev/input/js0
     ```
+    
+    <br>
 
 3. Interact with the device and observe how the <br>
    received packets are being printed to the log.
@@ -31,14 +37,22 @@
     [ 3969.152129] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
     ```
     
+    <br>
+    
 4. Save the `dmsg` buffer with:
 
     ```sh
     dmesg --level=debug > dmesg.txt
     ```
+    
+    <br>
 
 5. Use  <kbd> Ctrl + C </kbd>  to close <br>
    the console when finished.
+   
+   <br>
 
 6. Write a bug report describing the button <br>
    sequences and attach the saved buffer.
+   
+<br>
