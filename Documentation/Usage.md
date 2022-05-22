@@ -5,7 +5,9 @@
 
 <br>
 
-## Test
+## Access
+
+*Access the connected device.*
 
 `/dev/input/js<Id>`
 
@@ -24,6 +26,8 @@ jstest /dev/input/js0
 <br>
 
 ## Commanding
+
+*Send instructions to the controller.*
 
 `/sys/class/leds/xpad<Id>/brightness`
 
