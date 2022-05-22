@@ -24,22 +24,46 @@
 
 <br>
 
-This driver includes the latest changes in the upstream linux kernel and additionally carries the following staging changes:
+## Features
 
-* enable debug outputs to ease resolving issues
-* some minor code refactoring improving readability 
+- Latest change from the upstream Linux kernel
 
-## Xbox One Controllers
-This driver is only used if you connect the controller via USB.
+- Enabled debug output for resolving issues
 
-**Connecting via Bluetooth**  
-If you get past the pairing issues, the controller will operate in the [generic-HID bluetooth profile](https://en.wikipedia.org/wiki/List_of_Bluetooth_profiles#Human_Interface_Device_Profile_(HID)).  
-The xpad driver will not be used.
+- Minor code refactoring for improved readability
 
-**Conencting via XBox One Wireless Adapter (WiFi)**  
-The adapter needs daemon in userspace, see: [medusalix/xow](https://github.com/medusalix/xow)  
-Opinion: rather get a controller that supports bluetooth.
+<br>
+<br>
 
+## Connections
+
+*This is a **USB** only driver.*
+
+<br>
+
+### Bluetooth
+
+If you get past the pairing issues, the controller will <br>
+only operate in the **[Generic - HID Bluetooth Profile]**.  
+
+The **Xpad** driver will not be used.
+
+<br>
+
+### WiFi
+
+The **Xbox One** controller can be used with it's wireless <br>
+adapter, however it required a daemon in userspace. 
+
+⤷ **[medusalix/xow]**
+
+<br>
+
+##### Opinion
+
+Rather get a controller that supports bluetooth.
+
+<br>
 <br>
 
 ## Upstream
@@ -58,6 +82,9 @@ git send-email \
 
 
 <!----------------------------------------------------------------------------->
+
+[Generic - HID Bluetooth Profile]: https://en.wikipedia.org/wiki/List_of_Bluetooth_profiles#Human_Interface_Device_Profile_(HID)
+[medusalix/xow]: https://github.com/medusalix/xow
 
 [Change]: Documentation/Install.md
 [Usage]: Documentation/Usage.md
