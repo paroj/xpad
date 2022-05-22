@@ -1,23 +1,44 @@
 # Debugging
-As a regular unpriveledged user
 
-Setup console to display kernel log.  
-`dmesg --level=debug --follow`
+*The following instructions can be done as* <br>
+*a regular user without admin privileges.*
 
-Open a new console and access the device with jstest.  
-`jstest /dev/input/jsX`
+1. Display the kernel log in the console:
 
-Interact with the device and observe that data packets recieved from device are printed to kernel log.
-```
-[ 3968.772128] xpad-dbg: 00000000: 20 00 b5 0e 00 00 00 00 00 00 0c 03 04 fd 6c 01 40 fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-[ 3968.772135] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-[ 3968.804137] xpad-dbg: 00000000: 20 00 b6 0e 00 00 00 00 00 00 0c 03 04 fd 6c 01 fc fd 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-[ 3968.804145] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-[ 3969.152120] xpad-dbg: 00000000: 20 00 b7 0e 00 00 00 00 00 00 0c 03 04 fd 6c 01 b8 fd 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-[ 3969.152129] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-```
+    ```sh
+    dmesg --level=debug --follow
+    ```
 
-Save dmesg buffer and attach to bug report, don't forget to describe button sequences in bug report.  
-`dmesg --level=debug > dmesg.txt`
+2. In a new terminal access the device with `jstest` :
 
-Ctrl+C to close interactive console sessions when finished.
+    ```sh
+    jstest /dev/input/js<Id>
+    ```
+    
+    ```sh
+    jstest /dev/input/js0
+    ```
+
+3. Interact with the device and observe how the <br>
+   received packets are being printed to the log.
+
+    ```
+    [ 3968.772128] xpad-dbg: 00000000: 20 00 b5 0e 00 00 00 00 00 00 0c 03 04 fd 6c 01 40 fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    [ 3968.772135] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    [ 3968.804137] xpad-dbg: 00000000: 20 00 b6 0e 00 00 00 00 00 00 0c 03 04 fd 6c 01 fc fd 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    [ 3968.804145] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    [ 3969.152120] xpad-dbg: 00000000: 20 00 b7 0e 00 00 00 00 00 00 0c 03 04 fd 6c 01 b8 fd 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    [ 3969.152129] xpad-dbg: 00000020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    ```
+    
+4. Save the `dmsg` buffer with:
+
+    ```sh
+    dmesg --level=debug > dmesg.txt
+    ```
+
+5. Use  <kbd> Ctrl + C </kbd>  to close <br>
+   the console when finished.
+
+6. Write a bug report describing the button <br>
+   sequences and attach the saved buffer.

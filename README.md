@@ -14,7 +14,7 @@
 
 ---
 
-[![Button Install]][Install]  
+[![Button Change]][Change]  
 [![Button Usage]][Usage]  
 [![Button Debug]][Debug]
 
@@ -59,13 +59,13 @@ git send-email \
 
 <!----------------------------------------------------------------------------->
 
-[Install]: Documentation/Install.md
+[Change]: Documentation/Install.md
 [Usage]: Documentation/Usage.md
 [Debug]: Documentation/Debug.md
 
 
 <!---------------------------------{ Buttons }--------------------------------->
 
-[Button Install]: https://img.shields.io/badge/Install_/_Update_/_Remove-cfab42?style=for-the-badge
+[Button Change]: https://img.shields.io/badge/Install_/_Update_/_Remove-cfab42?style=for-the-badge
 [Button Usage]: https://img.shields.io/badge/Usage-62a0dd?style=for-the-badge
 [Button Debug]: https://img.shields.io/badge/Debug-cf427c?style=for-the-badge
