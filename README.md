@@ -1,5 +1,5 @@
 
-# Xpad
+# Xpad    [![Badge License]][License]
 
 *An updated **Xpad Linux Kernel Driver**.*
 
@@ -57,7 +57,7 @@ adapter, however it required a daemon in userspace.
 
 ⤷ **[medusalix/xow]**
 
-<br>
+<br>Badge License]:
 
 ##### Opinion
 
@@ -90,6 +90,9 @@ git send-email \
 [Usage]: Documentation/Usage.md
 [Debug]: Documentation/Debug.md
 
+[License]: LICENSE
+
+[Badge License]: https://img.shields.io/badge/License-GPL_3-blue.svg?style=for-the-badge
 
 <!---------------------------------{ Buttons }--------------------------------->
 
