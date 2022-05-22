@@ -9,6 +9,8 @@
 
 `/dev/input/js<Id>`
 
+<br>
+
 #### Example
 
 ```sh
@@ -16,11 +18,16 @@ jstest /dev/input/js0
 ```
 
 <br>
+
+---
+
 <br>
 
 ## Commanding
 
 `/sys/class/leds/xpad<Id>/brightness`
+
+<br>
 
 #### Example
 
@@ -31,6 +38,8 @@ echo <Command> > /sys/class/leds/xpad0/brightness
 ```sh
 echo 0 > /sys/class/leds/xpad0/brightness
 ```
+
+<br>
 
 | Command | Description
 |:-------:|:-----------
@@ -52,14 +61,21 @@ echo 0 > /sys/class/leds/xpad0/brightness
 | `15` | Blink Once 🠖 previous setting
 
 <br>
+
+---
+
 <br>
 
 ## Events
 
 *The generic event device.*
 
+<br>
+
 #### Example
 
 ```sh
 fftest /dev/input/by-id/usb-*360*event*
 ```
+
+<br>
