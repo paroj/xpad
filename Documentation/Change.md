@@ -1,4 +1,6 @@
 
+<br>
+
 ## Installing
 
 ```sh
@@ -10,6 +12,8 @@ sudo dkms install   \
     -m xpad         \
     -v 0.4
 ```
+
+<br>
 
 ## Updating
 
@@ -28,6 +32,8 @@ sudo dkms install   \
     -m xpad         \
     -v 0.4
 ```
+
+<br>
 
 ## Removing
 

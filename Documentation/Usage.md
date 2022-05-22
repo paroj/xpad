@@ -1,25 +1,65 @@
-# Usage
-This driver creates three devices for each attached gamepad
 
-1. /dev/input/js**N**
-    * example `jstest /dev/input/js0`
-2. /sys/class/leds/xpad**N**/brightness
-    * example `echo COMMAND > /sys/class/leds/xpad0/brightness` where COMMAND is one of
-        *  0: off
-        *  1: all blink, then previous setting
-        *  2: 1/top-left blink, then on
-        *  3: 2/top-right blink, then on
-        *  4: 3/bottom-left blink, then on
-        *  5: 4/bottom-right blink, then on
-        *  6: 1/top-left on
-        *  7: 2/top-right on
-        *  8: 3/bottom-left on
-        *  9: 4/bottom-right on
-        * 10: rotate
-        * 11: blink, based on previous setting
-        * 12: slow blink, based on previous setting
-        * 13: rotate with two lights
-        * 14: persistent slow all blink
-        * 15: blink once, then previous setting
-3. the generic event device
-    * example `fftest /dev/input/by-id/usb-*360*event*`
+# Usage
+
+*This driver creates three devices for each attached gamepad.*
+
+<br>
+
+## Test
+
+`/dev/input/js<Id>`
+
+#### Example
+
+```sh
+jstest /dev/input/js0
+```
+
+<br>
+<br>
+
+## Commanding
+
+`/sys/class/leds/xpad<Id>/brightness`
+
+#### Example
+
+```sh
+echo <Command> > /sys/class/leds/xpad0/brightness
+```
+
+```sh
+echo 0 > /sys/class/leds/xpad0/brightness
+```
+
+| Command | Description
+|:-------:|:-----------
+|  `0` | Turn Off
+|  `1` | Blink All 🠖 Previous Setting
+|  `2` | Blink `1 / top-left` 🠖 On
+|  `3` | Blink `2 / top-right` 🠖 On
+|  `4` | Blink `3 / bottom-left` 🠖 On
+|  `5` | Blink `4 / bottom-right` 🠖 On
+|  `6` | `1 / top-left` On
+|  `7` | `2 / top-right` On
+|  `8` | `3 / bottom-left` On
+|  `9` | `4 / bottom-right` On
+| `10` | Rotate
+| `11` | Blink based on previous setting
+| `12` | Slow blink based on previous setting
+| `13` | Rotate with two lights
+| `14` | Persistent slow all blink
+| `15` | Blink Once 🠖 previous setting
+
+<br>
+<br>
+
+## Events
+
+*The generic event device.*
+
+#### Example
+
+```sh
+fftest /dev/input/by-id/usb-*360*event*
+```
