@@ -13,7 +13,7 @@ This driver is only used if you connect the controller via USB.
 If you get past the pairing issues, the controller will operate in the [generic-HID bluetooth profile](https://en.wikipedia.org/wiki/List_of_Bluetooth_profiles#Human_Interface_Device_Profile_(HID)).  
 The xpad driver will not be used.
 
-**Conencting via XBox One Wireless Adapter (WiFi)**  
+**Connecting via XBox One Wireless Adapter (WiFi)**  
 The adapter needs daemon in userspace, see: [medusalix/xow](https://github.com/medusalix/xow)  
 Opinion: rather get a controller that supports bluetooth.
 
