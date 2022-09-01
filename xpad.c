@@ -743,8 +743,7 @@ static int ghl_init_urb(struct usb_xpad *sc, struct usb_device *usbdev,
 {
 	u8 *databuf;
 	unsigned int pipe;
-	u16 ghl_magic_value = (((2) << 8) | ghl_magic_data[0]);
-
+	
 	pipe = usb_sndintpipe(usbdev, ep_irq_out->bEndpointAddress);
 
 	databuf = devm_kzalloc(&sc->udev->dev, poke_size, GFP_ATOMIC);
