@@ -709,12 +709,12 @@ static void xpad360w_poweroff_controller(struct usb_xpad *xpad);
  */
 static void ghl_magic_poke_cb(struct urb *urb)
 {
-	struct usb_xpad *sc = urb->context;
+	struct usb_xpad *xpad = urb->context;
 
 	if (urb->status < 0)
 		pr_warn("URB transfer failed.\n");
 
-	mod_timer(&sc->ghl_poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
+	mod_timer(&xpad->ghl_poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
 }
 
 /*
@@ -725,9 +725,9 @@ static void ghl_magic_poke_cb(struct urb *urb)
 static void ghl_magic_poke(struct timer_list *t)
 {
 	int ret;
-	struct usb_xpad *sc = from_timer(sc, t, ghl_poke_timer);
+	struct usb_xpad *xpad = from_timer(xpad, t, ghl_poke_timer);
 
-	ret = usb_submit_urb(sc->ghl_urb, GFP_ATOMIC);
+	ret = usb_submit_urb(xpad->ghl_urb, GFP_ATOMIC);
 	if (ret < 0)
 		pr_warn("URB transfer failed.\n");
 }
@@ -737,7 +737,7 @@ static void ghl_magic_poke(struct timer_list *t)
  *
  *	Prepares the interrupt URB for GHL magic_data.
  */
-static int ghl_init_urb(struct usb_xpad *sc, struct usb_device *usbdev,
+static int ghl_init_urb(struct usb_xpad *xpad, struct usb_device *usbdev,
 		const char ghl_magic_data[], u16 poke_size, struct usb_endpoint_descriptor *ep_irq_out)
 {
 	u8 *databuf;
@@ -745,16 +745,16 @@ static int ghl_init_urb(struct usb_xpad *sc, struct usb_device *usbdev,
 
 	pipe = usb_sndintpipe(usbdev, ep_irq_out->bEndpointAddress);
 
-	databuf = devm_kzalloc(&sc->udev->dev, poke_size, GFP_ATOMIC);
+	databuf = devm_kzalloc(&xpad->udev->dev, poke_size, GFP_ATOMIC);
 	if (databuf == NULL)
 		return -ENOMEM;
 
 	memcpy(databuf, ghl_magic_data, poke_size);
 
 	usb_fill_int_urb(
-		sc->ghl_urb, usbdev, pipe,
+		xpad->ghl_urb, usbdev, pipe,
 		databuf, poke_size,
-		ghl_magic_poke_cb, sc, ep_irq_out->bInterval);
+		ghl_magic_poke_cb, xpad, ep_irq_out->bInterval);
 
 	return 0;
 }
@@ -1150,7 +1150,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 
 		do_sync = true;
 	} else if (data[0] == 0X21) { /* The main valid packet type for GHL inputs */
-		/* Buttons and axes were mapped according to other GHL controllers */
+		/* Mapping chosen to be coherent with GHL dongles of other consoles */
 
 		/* The 6 fret buttons */
 		input_report_key(dev, BTN_B, data[4] & 0x02);
