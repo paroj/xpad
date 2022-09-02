@@ -693,8 +693,8 @@ struct usb_xpad {
 	const char *name;		/* name of the device */
 	struct work_struct work;	/* init/remove device from callback */
 	time64_t mode_btn_down_ts;
-	struct urb *magic_data;		/* URB for GHL Xbox One magic data */
-	struct timer_list poke_timer;	/* Timer for periodic poke of GHL magic data */
+	struct urb *ghl_urb;		/* URB for GHL Xbox One magic data */
+	struct timer_list ghl_poke_timer;	/* Timer for periodic poke of GHL magic data */
 };
 
 static int xpad_init_input(struct usb_xpad *xpad);
@@ -714,7 +714,7 @@ static void ghl_magic_poke_cb(struct urb *urb)
 	if (urb->status < 0)
 		pr_warn("URB transfer failed.\n");
 
-	mod_timer(&sc->poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
+	mod_timer(&sc->ghl_poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
 }
 
 /*
@@ -725,10 +725,9 @@ static void ghl_magic_poke_cb(struct urb *urb)
 static void ghl_magic_poke(struct timer_list *t)
 {
 	int ret;
-	struct usb_xpad *sc = from_timer(sc, t, poke_timer);
-	unsigned long flags;
+	struct usb_xpad *sc = from_timer(sc, t, ghl_poke_timer);
 
-	ret = usb_submit_urb(sc->magic_data, GFP_ATOMIC);
+	ret = usb_submit_urb(sc->ghl_urb, GFP_ATOMIC);
 	if (ret < 0)
 		pr_warn("URB transfer failed.\n");
 }
@@ -743,7 +742,7 @@ static int ghl_init_urb(struct usb_xpad *sc, struct usb_device *usbdev,
 {
 	u8 *databuf;
 	unsigned int pipe;
-	
+
 	pipe = usb_sndintpipe(usbdev, ep_irq_out->bEndpointAddress);
 
 	databuf = devm_kzalloc(&sc->udev->dev, poke_size, GFP_ATOMIC);
@@ -753,7 +752,7 @@ static int ghl_init_urb(struct usb_xpad *sc, struct usb_device *usbdev,
 	memcpy(databuf, ghl_magic_data, poke_size);
 
 	usb_fill_int_urb(
-		sc->magic_data, usbdev, pipe,
+		sc->ghl_urb, usbdev, pipe,
 		databuf, poke_size,
 		ghl_magic_poke_cb, sc, ep_irq_out->bInterval);
 
@@ -1151,14 +1150,15 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 
 		do_sync = true;
 	} else if (data[0] == 0X21) { /* The main valid packet type for GHL inputs */
+		/* Buttons and axes were mapped according to other GHL controllers */
 
 		/* The 6 fret buttons */
 		input_report_key(dev, BTN_B, data[4] & 0x02);
 		input_report_key(dev, BTN_X, data[4] & 0x04);
 		input_report_key(dev, BTN_Y, data[4] & 0x08);
-		input_report_key(dev, BTN_TL, data[4] & 0x01);
-		input_report_key(dev, BTN_TR, data[4] & 0x10);
-		input_report_key(dev, BTN_SELECT, data[4] & 0x20);
+		input_report_key(dev, BTN_A, data[4] & 0x01);
+		input_report_key(dev, BTN_TL, data[4] & 0x10);
+		input_report_key(dev, BTN_TR, data[4] & 0x20);
 
 		/* D-pad */
 		dpad_value = data[6] & 0xF;
@@ -1178,7 +1178,7 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 		input_report_abs(dev, ABS_RZ, ((data[10] - 0x80) << 9));
 
 		/* Power Button */
-		input_report_key(dev, BTN_A, data[5] & 0x10);
+		input_report_key(dev, BTN_THUMBR, data[5] & 0x10);
 
 		/* GHTV button */
 		input_report_key(dev, BTN_START, data[5] & 0x04);
@@ -2295,8 +2295,8 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 
 	if (xpad->quirks & QUIRK_GHL_XBOXONE) {
 
-		xpad->magic_data = usb_alloc_urb(0, GFP_ATOMIC);
-		if (!xpad->magic_data)
+		xpad->ghl_urb = usb_alloc_urb(0, GFP_ATOMIC);
+		if (!xpad->ghl_urb)
 			return -ENOMEM;
 
 		error = ghl_init_urb(xpad, udev, ghl_xboxone_magic_data, ARRAY_SIZE(ghl_xboxone_magic_data), ep_irq_out);
@@ -2304,8 +2304,8 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 		if (error)
 			return error;
 
-	timer_setup(&xpad->poke_timer, ghl_magic_poke, 0);
-	mod_timer(&xpad->poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
+		timer_setup(&xpad->ghl_poke_timer, ghl_magic_poke, 0);
+		mod_timer(&xpad->ghl_poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
 	}
 
 	return 0;
@@ -2339,8 +2339,12 @@ static void xpad_disconnect(struct usb_interface *intf)
 	xpad_deinit_output(xpad);
 
 	usb_free_urb(xpad->irq_in);
-	usb_free_urb(xpad->magic_data);
-	del_timer_sync(&xpad->poke_timer);
+
+	if (xpad->quirks & QUIRK_GHL_XBOXONE) {
+		usb_free_urb(xpad->ghl_urb);
+		del_timer_sync(&xpad->ghl_poke_timer);
+	}
+
 	usb_free_coherent(xpad->udev, XPAD_PKT_LEN,
 			xpad->idata, xpad->idata_dma);
 
