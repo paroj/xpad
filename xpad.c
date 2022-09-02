@@ -73,6 +73,10 @@
 #include <linux/timer.h>
 
 #define XPAD_PKT_LEN 64
+
+/* The Guitar Hero Live (GHL) Xbox One dongles require a poke 
+ * every 8 seconds.
+ */
 #define GHL_GUITAR_POKE_INTERVAL 8 /* In seconds */
 
 /*
