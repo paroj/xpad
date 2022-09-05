@@ -1,0 +1,19 @@
+name: CI Build
+on: 
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y dkms
+    - uses: actions/checkout@v2
+    - name: Build
+      run: |
+        sudo ln -s `pwd` /usr/src/xpad-0.4
+        sudo dkms install -m xpad -v 0.4
