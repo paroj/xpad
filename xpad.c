@@ -606,7 +606,7 @@ static const u8 extra_input_packet_init[] = {
  * (0x0f0d:0x0067) to make the analog sticks work.
  */
 static const u8 xboxone_hori_ack_id[] = {
-	GIP_CMD_ACK, GIP_OPT_INTERNAL, GIP_SEQ0, GIP_PL_LEN(9), 
+	GIP_CMD_ACK, GIP_OPT_INTERNAL, GIP_SEQ0, GIP_PL_LEN(9),
 	0x00, GIP_CMD_IDENTIFY, GIP_OPT_INTERNAL, 0x3a, 0x00, 0x00, 0x00, 0x80, 0x00
 };
 
@@ -734,7 +734,6 @@ struct usb_xpad {
 	time64_t mode_btn_down_ts;
 	struct urb *ghl_urb;		/* URB for GHL Xbox One magic data */
 	struct timer_list ghl_poke_timer;	/* Timer for periodic poke of GHL magic data */
-
 };
 
 static int xpad_init_input(struct usb_xpad *xpad);
@@ -1633,7 +1632,7 @@ static void xpadone_ack_mode_report(struct usb_xpad *xpad, u8 seq_num)
 	struct xpad_output_packet *packet =
 			&xpad->out_packets[XPAD_OUT_CMD_IDX];
 	static const u8 mode_report_ack[] = {
-		GIP_CMD_ACK, GIP_OPT_INTERNAL, GIP_SEQ0, GIP_PL_LEN(9), 
+		GIP_CMD_ACK, GIP_OPT_INTERNAL, GIP_SEQ0, GIP_PL_LEN(9),
 		0x00, GIP_CMD_VIRTUAL_KEY, GIP_OPT_INTERNAL, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00
 	};
 
@@ -2348,7 +2347,6 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 		timer_setup(&xpad->ghl_poke_timer, ghl_magic_poke, 0);
 		mod_timer(&xpad->ghl_poke_timer, jiffies + GHL_GUITAR_POKE_INTERVAL*HZ);
 	}
-
 	return 0;
 
 err_deinit_output:
