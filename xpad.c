@@ -11,7 +11,6 @@
  *               2006 Adam Buchbinder <adam.buchbinder@gmail.com>
  *               2007 Jan Kratochvil <honza@jikos.cz>
  *               2010 Christoph Fritz <chf.fritz@googlemail.com>
- *               2022 Daniel Nguyen <daniel.nguyen.1@ens.etsmtl.ca>
  *
  * This driver is based on:
  *  - information from     http://euc.jp/periphs/xbox-controller.ja.html
