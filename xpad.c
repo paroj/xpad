@@ -2022,18 +2022,20 @@ static void xpad_set_up_abs(struct input_dev *input_dev, signed short abs)
 	case ABS_X:
 	case ABS_Y:
 		/* GHL Strum bar */
-		if ((xpad->xtype == XTYPE_XBOXONE) && (xpad->quirks & QUIRK_GHL_XBOXONE))
+		if ((xpad->xtype == XTYPE_XBOXONE) && (xpad->quirks & QUIRK_GHL_XBOXONE)) {
 			input_set_abs_params(input_dev, abs, -32767, 32767, 0, 0);
-		break;
+			break;
+		}
 	case ABS_RX:
 	case ABS_RY:	/* the two sticks */
 		input_set_abs_params(input_dev, abs, -32768, 32767, 16, 128);
 		break;
 	case ABS_Z:
 		/* GHL Tilt sensor */
-		if ((xpad->xtype == XTYPE_XBOXONE) && (xpad->quirks & QUIRK_GHL_XBOXONE))
+		if ((xpad->xtype == XTYPE_XBOXONE) && (xpad->quirks & QUIRK_GHL_XBOXONE)) {
 			input_set_abs_params(input_dev, abs, -32767, 32767, 0, 0);
-		break;
+			break;
+		}
 	case ABS_RZ:	/* the triggers (if mapped to axes) */
 		if (xpad->xtype == XTYPE_XBOXONE) {
 			/* GHL Whammy bar */
