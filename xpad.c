@@ -1561,7 +1561,7 @@ static int xpad_start_xbox_360(struct usb_xpad *xpad)
 	have to inspect the manufacturer string.
 	Sending this sequence to other controllers will break initialization.
 	*/
-	bool is_shanwan = strcasecmp("shanwan", xpad->udev->manufacturer) == 0;
+	bool is_shanwan = xpad->udev->manufacturer && strcasecmp("shanwan", xpad->udev->manufacturer) == 0;
 	if (!(xpad->quirks & QUIRK_360_START) && !is_shanwan) {
 		status = 0;
 		goto err_free_ctrl_data;
