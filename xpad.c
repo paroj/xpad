@@ -73,7 +73,7 @@
 
 #define XPAD_PKT_LEN 64
 
-/* The Guitar Hero Live (GHL) Xbox One dongles require a poke 
+/* The Guitar Hero Live (GHL) Xbox One dongles require a poke
  * every 8 seconds.
  */
 #define GHL_GUITAR_POKE_INTERVAL 8 /* In seconds */
@@ -964,6 +964,59 @@ static void xpad360_process_packet(struct usb_xpad *xpad, struct input_dev *dev,
 		input_report_abs(dev, ABS_Z, data[4]);
 		input_report_abs(dev, ABS_RZ, data[5]);
 	}
+
+  // Flydigi Vader 3 C/Z/Back Buttons/meta buttons map via app in X-Input, but still
+  // come through as distinct keys - amazing!  How can we ensure it's present in data range?
+  // We need a length/bounds check here - Flydigi Vader 3 identifies as a 360 controller
+  // Using D-Input with it only works via Bluetooth and lacks rumble, while X-Input here has both
+  // the extra keys and rumble when using the Flydigi Vader3 2.4ghz dongle.
+  if (data[19] & 1) { // C
+    input_report_key(dev, BTN_TRIGGER_HAPPY7, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY7, 0);
+  }
+
+  if (data[19] & 2) { // Z
+    input_report_key(dev, BTN_TRIGGER_HAPPY8, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY8, 0);
+  }
+
+  if (data[19] & 8) { // Leftmost paddle
+    input_report_key(dev, BTN_TRIGGER_HAPPY9, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY9, 0);
+  }
+
+  if (data[19] & 32) { // Second to leftmost
+    input_report_key(dev, BTN_TRIGGER_HAPPY10, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY10, 0);
+  }
+
+  if (data[19] & 16) { // Second to rightmost
+    input_report_key(dev, BTN_TRIGGER_HAPPY11, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY11, 0);
+  }
+
+  if (data[19] & 4) { // Rightmost paddle
+    input_report_key(dev, BTN_TRIGGER_HAPPY12, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY12, 0);
+  }
+
+  if (data[20] & 1) { // Circle
+    input_report_key(dev, BTN_TRIGGER_HAPPY13, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY13, 0);
+  }
+
+  if (data[20] & 8) { // Circle
+    input_report_key(dev, BTN_TRIGGER_HAPPY14, 1);
+  } else {
+    input_report_key(dev, BTN_TRIGGER_HAPPY14, 0);
+  }
 
 	input_sync(dev);
 
@@ -2154,6 +2207,10 @@ static int xpad_init_input(struct usb_xpad *xpad)
 		for (i = 0; xpad_btn_paddles[i] >= 0; i++)
 			input_set_capability(input_dev, EV_KEY, xpad_btn_paddles[i]);
 	}
+
+  for (i = 0; i < 16; i++) {
+    set_bit(BTN_TRIGGER_HAPPY1 + i, input_dev->keybit);
+  }
 
 	/*
 	 * This should be a simple else block. However historically
