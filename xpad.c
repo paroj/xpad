@@ -389,7 +389,7 @@ static const struct xpad_device {
 	{ 0x3285, 0x0614, "Nacon Pro Compact", 0, XTYPE_XBOXONE },
 	{ 0x3767, 0x0101, "Fanatec Speedster 3 Forceshock Wheel", 0, XTYPE_XBOX },
 	{ 0x413d, 0x2104, "Black Shark Green Ghost Gamepad", 0, XTYPE_XBOX360 },
-	{ 0x2345, 0xe00b, "Machenike G5 Pro controller", 0, XTYPE_XBOX360, QUIRK_360_START_PKT_1 },
+	{ 0x2345, 0xe00b, "Machenike G5 Pro controller", 0, XTYPE_XBOX360 },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
 };
