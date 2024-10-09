@@ -73,6 +73,11 @@
 #include <linux/usb/quirks.h>
 #include <linux/timer.h>
 
+// enable compilation on pre 6.1 kernels
+#ifndef ABS_PROFILE
+#define ABS_PROFILE ABS_MISC
+#endif
+
 #define XPAD_PKT_LEN 64
 
 /* The Guitar Hero Live (GHL) Xbox One dongles require a poke 
