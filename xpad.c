@@ -91,7 +91,7 @@
 
 #define XPAD_PKT_LEN 64
 
-/* The Guitar Hero Live (GHL) Xbox One dongles require a poke 
+/* The Guitar Hero Live (GHL) Xbox One dongles require a poke
  * every 8 seconds.
  */
 #define GHL_GUITAR_POKE_INTERVAL 8 /* In seconds */
@@ -430,6 +430,7 @@ static const struct xpad_device {
 	{ 0x3285, 0x0603, "Nacon Pro Compact controller for Xbox", 0, XTYPE_XBOXONE },
 	{ 0x3285, 0x0607, "Nacon GC-100", 0, XTYPE_XBOX360 },
 	{ 0x3285, 0x0614, "Nacon Pro Compact", 0, XTYPE_XBOXONE },
+	{ 0x3285, 0x0661, "Nacon Revolution5 Pro", 0, XTYPE_XBOX360 },
 	{ 0x3285, 0x0662, "Nacon Revolution5 Pro", 0, XTYPE_XBOX360 },
 	{ 0x3285, 0x0663, "Nacon Evol-X", 0, XTYPE_XBOXONE },
 	{ 0x3537, 0x1004, "GameSir T4 Kaleid", 0, XTYPE_XBOX360 },
