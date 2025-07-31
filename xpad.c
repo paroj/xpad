@@ -79,6 +79,11 @@
 #define timer_delete_sync del_timer_sync
 #endif
 
+// backward compatibility. from_timer is renamed to timer_container_of since 6.16.0
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#define timer_container_of from_timer
+#endif
+
 // enable compilation on pre 6.1 kernels
 #ifndef ABS_PROFILE
 #define ABS_PROFILE ABS_MISC
@@ -846,7 +851,7 @@ static void ghl_magic_poke_cb(struct urb *urb)
 static void ghl_magic_poke(struct timer_list *t)
 {
 	int ret;
-	struct usb_xpad *xpad = from_timer(xpad, t, ghl_poke_timer);
+	struct usb_xpad *xpad = timer_container_of(xpad, t, ghl_poke_timer);
 
 	ret = usb_submit_urb(xpad->ghl_urb, GFP_ATOMIC);
 	if (ret < 0)
