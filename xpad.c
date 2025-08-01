@@ -1673,10 +1673,14 @@ static int xpad_start_xbox_360(struct usb_xpad *xpad)
 	}
 
 	if ((xpad->quirks & QUIRK_360_START_PKT_1) || is_shanwan) {
+	    /* Get_Report(0x01), Default Controller Input Report(0x0100) */
 	    status = usb_control_msg(xpad->udev,
 		    usb_rcvctrlpipe(xpad->udev, 0),
-		    0x1, 0xc1,
-		    cpu_to_le16(0x100), cpu_to_le16(0x0), data, cpu_to_le16(20),
+		    0x01,
+		    USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE,
+		    0x0100,
+		    xpad->intf->cur_altsetting->desc.bInterfaceNumber,
+		    data, 20,
 		    TIMEOUT);
 
 #ifdef DEBUG
@@ -1695,10 +1699,14 @@ static int xpad_start_xbox_360(struct usb_xpad *xpad)
 	}
 
 	if ((xpad->quirks & QUIRK_360_START_PKT_2) || is_shanwan) {
+	    /* Get_Report(0x01), non-documented request(0x0000) */
 	    status = usb_control_msg(xpad->udev,
 		    usb_rcvctrlpipe(xpad->udev, 0),
-		    0x1, 0xc1,
-		    cpu_to_le16(0x0), cpu_to_le16(0x0), data, cpu_to_le16(8),
+		    0x01,
+		    USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE,
+		    0x0000,
+		    xpad->intf->cur_altsetting->desc.bInterfaceNumber,
+		    data, 8,
 		    TIMEOUT);
 #ifdef DEBUG
 	    dev_dbg(&xpad->intf->dev,
@@ -1716,10 +1724,13 @@ static int xpad_start_xbox_360(struct usb_xpad *xpad)
 	}
 
 	if ((xpad->quirks & QUIRK_360_START_PKT_3) || is_shanwan) {
+	    /* Get_Report(0x01), Get_Device_ID(0x0000,0x0000) */
 	    status = usb_control_msg(xpad->udev,
 		    usb_rcvctrlpipe(xpad->udev, 0),
-		    0x1, 0xc0,
-		    cpu_to_le16(0x0), cpu_to_le16(0x0), data, cpu_to_le16(4),
+		    0x01,
+		    USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_DEVICE,
+		    0x0000, 0x0000,
+		    data, 4,
 		    TIMEOUT);
 #ifdef DEBUG
 	    dev_dbg(&xpad->intf->dev,
@@ -2051,15 +2062,15 @@ static int xpad_start_input(struct usb_xpad *xpad)
 		 */
 		u8 dummy[20];
 
+		/* Get_Report(0x01), Default Controller Input Report(0x0100) */
 		error = usb_control_msg_recv(xpad->udev, 0,
 					     /* bRequest */ 0x01,
 					     /* bmRequestType */
-					     USB_TYPE_VENDOR | USB_DIR_IN |
-						USB_RECIP_INTERFACE,
-					     /* wValue */ 0x100,
-					     /* wIndex */ 0x00,
+					     USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE,
+					     /* wValue */ 0x0100,
+					     /* wIndex */ xpad->intf->cur_altsetting->desc.bInterfaceNumber,
 					     dummy, sizeof(dummy),
-					     25, GFP_KERNEL);
+					     50, GFP_KERNEL);
 		if (error)
 			dev_warn(&xpad->dev->dev,
 				 "unable to receive magic message: %d\n",
