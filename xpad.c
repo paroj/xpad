@@ -74,19 +74,55 @@
 #include <linux/usb/quirks.h>
 #include <linux/timer.h>
 
-// backward compatibility. del_timer_sync is renamed to timer_delete_sync since 6.15.0
+/* backwards compatibility. Pre-4.20 kernels: define timer_container_of manually */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,20,0)
+#define timer_container_of(var, timer, field) \
+    container_of((timer), typeof(*(var)), field)
+/* Pre-6.16 kernels (but ≥4.20): alias timer_container_of to from_timer */
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#define timer_container_of from_timer
+#endif
+
+/* backwards compatibility. from_timer() was added in 4.15 */
+/* Note: from_timer() renamed to timer_container_of() in kernel 6.16 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
+#define from_timer(var, timer, field) \
+    container_of((timer), typeof(*(var)), field)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#define from_timer(var, timer, field) timer_container_of(var, timer, field)
+#endif
+
+/* backwards compatibility.  del_timer_sync renamed to timer_delete_sync in 6.15 */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 #define timer_delete_sync del_timer_sync
 #endif
 
-// backward compatibility. from_timer is renamed to timer_container_of since 6.16.0
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
-#define timer_container_of from_timer
-#endif
-
-// enable compilation on pre 6.1 kernels
+/* backwards compatibility. ABS_PROFILE fallback (older kernels) */
 #ifndef ABS_PROFILE
 #define ABS_PROFILE ABS_MISC
+#endif
+
+/* backwards compatibility. timer_setup fallback for pre-4.15 kernels */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
+#define timer_setup(timer, callback, flags) \
+    setup_timer((timer), (void (*)(unsigned long))(callback), (unsigned long)(timer))
+#endif
+
+/* backwards compatibility. ida_alloc / ida_free fallback (pre 5.18) */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
+#define ida_alloc(ida, gfp) ida_simple_get(ida, 0, 0, gfp)
+#define ida_free(ida, id)   ida_simple_remove(ida, id)
+#endif
+
+/* backwards compatibility. usb_control_msg_recv fallback (pre 5.10) */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
+static inline int usb_control_msg_recv(struct usb_device *dev, unsigned int pipe,
+        __u8 request, __u8 requesttype, __u16 value, __u16 index,
+        void *data, __u16 size, int timeout, gfp_t memflags)
+{
+    return usb_control_msg(dev, pipe, request, requesttype, value, index,
+                           data, size, timeout);
+}
 #endif
 
 #define XPAD_PKT_LEN 64
