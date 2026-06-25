@@ -8,6 +8,31 @@ This driver includes the latest changes in the upstream linux kernel and additio
 * support for more compatible devices
 * support for xbox360 class controllers, that need initialisation
 * support Guitar Hero Live xbox one controller
+* support for the Xbox 360 Chatpad keyboard accessory (wired and wireless)
+
+## Xbox 360 Chatpad
+The Chatpad is the small QWERTY keyboard that clips onto an Xbox 360 controller.
+When attached it shows up as an additional keyboard input device named
+"<controller> Chatpad" and reports normal key events.
+
+The **green** and **orange** keys act as symbol layers: holding one and pressing
+a key types the symbol printed on the keycap in that colour (Shift is
+synthesized automatically for symbols such as `!` or `{`). Symbols that have no
+Linux keycode — the accented letters and a few others (`€`, `¨`, `«`, `»`,
+etc.) printed on the international Chatpad — are ignored. **Shift** works as
+usual and the **people** key is reported as Meta (Super). **Orange + Shift**
+(the orange `CAPS` legend on the shift key) toggles **Caps Lock**.
+
+While a modifier is held, its backlight LED on the Chatpad lights up, on both
+wired and wireless controllers. The shift LED additionally doubles as a Caps
+Lock indicator: while Caps Lock is on it stays lit (driven by the system's
+real caps-lock state, so it also reflects toggles from other keyboards).
+
+Chatpad support is enabled by default; it can be disabled with the `chatpad=0`
+module parameter:
+```
+options xpad chatpad=0
+```
 
 ## Xbox One Controllers
 This driver is only used if you connect the controller via USB.
