@@ -434,6 +434,7 @@ static const struct xpad_device {
 	{ 0x3285, 0x0663, "Nacon Evol-X", 0, XTYPE_XBOXONE },
 	{ 0x3537, 0x1004, "GameSir T4 Kaleid", 0, XTYPE_XBOX360 },
 	{ 0x3767, 0x0101, "Fanatec Speedster 3 Forceshock Wheel", 0, XTYPE_XBOX },
+	{ 0x37d7, 0x2801, "Flydigi Flydigi Vader 5S", 0, XTYPE_XBOXONE},
 	{ 0x413d, 0x2104, "Black Shark Green Ghost Gamepad", 0, XTYPE_XBOX360 },
 	{ 0xffff, 0xffff, "Chinese-made Xbox Controller", 0, XTYPE_XBOX },
 	{ 0x0000, 0x0000, "Generic X-Box pad", 0, XTYPE_UNKNOWN }
@@ -581,7 +582,7 @@ static const struct usb_device_id xpad_table[] = {
 	XPAD_XBOXONE_VENDOR(0x24c6),		/* PowerA controllers */
 	XPAD_XBOX360_VENDOR(0x2563),		/* OneXPlayer Gamepad */
 	XPAD_XBOX360_VENDOR(0x260d),		/* Dareu H101 */
-       XPAD_XBOXONE_VENDOR(0x294b),            /* Snakebyte */
+	XPAD_XBOXONE_VENDOR(0x294b),            /* Snakebyte */
 	XPAD_XBOXONE_VENDOR(0x2c16),		/* Surge Controllers */
 	XPAD_XBOX360_VENDOR(0x2c22),		/* Qanba Controllers */
 	XPAD_XBOX360_VENDOR(0x2dc8),            /* 8BitDo Pro 2 Wired Controller */
@@ -594,6 +595,7 @@ static const struct usb_device_id xpad_table[] = {
 	XPAD_XBOXONE_VENDOR(0x3285),		/* Nacon Evol-X */
 	XPAD_XBOX360_VENDOR(0x3537),		/* GameSir Controllers */
 	XPAD_XBOXONE_VENDOR(0x3537),		/* GameSir Controllers */
+	XPAD_XBOXONE_VENDOR(0x37d7),        	/* Flydigi Controllers */
 	XPAD_XBOX360_VENDOR(0x413d),		/* Black Shark Green Ghost Controller */
 	{ }
 };
@@ -748,6 +750,9 @@ static const struct xboxone_init_packet xboxone_init_packets[] = {
 	XBOXONE_INIT_PKT(0x0e6f, 0x0165, xboxone_hori_ack_id),
 	XBOXONE_INIT_PKT(0x0f0d, 0x0067, xboxone_hori_ack_id),
 	XBOXONE_INIT_PKT(0x1430, 0x079b, xboxone_hori_ack_id),
+	XBOXONE_INIT_PKT(0x37d7, 0x2801, xboxone_hori_ack_id),
+	XBOXONE_INIT_PKT(0x37d7, 0x2801, xboxone_pdp_led_on),
+	XBOXONE_INIT_PKT(0x37d7, 0x2801, xboxone_pdp_auth),
 	XBOXONE_INIT_PKT(0x0000, 0x0000, xboxone_power_on),
 	XBOXONE_INIT_PKT(0x045e, 0x02ea, xboxone_s_init),
 	XBOXONE_INIT_PKT(0x045e, 0x0b00, xboxone_s_init),
@@ -825,6 +830,7 @@ struct usb_xpad {
 
 static int xpad_init_input(struct usb_xpad *xpad);
 static void xpad_deinit_input(struct usb_xpad *xpad);
+static void xpadone_ack_identify_report(struct usb_xpad *xpad, u8 seq_num);
 static void xpadone_ack_mode_report(struct usb_xpad *xpad, u8 seq_num);
 static void xpad360w_poweroff_controller(struct usb_xpad *xpad);
 
@@ -1143,6 +1149,11 @@ static void xpadone_process_packet(struct usb_xpad *xpad, u16 cmd, unsigned char
 	struct input_dev *dev = xpad->dev;
 	bool do_sync = false;
 	int dpad_value;
+
+	if (data[0] == GIP_CMD_IDENTIFY) {
+		xpadone_ack_identify_report(xpad, data[2]);
+		return;
+	}
 
 	/* the xbox button has its own special report */
 	if (data[0] == GIP_CMD_VIRTUAL_KEY) {
@@ -1636,6 +1647,7 @@ static int xpad_start_xbox_one(struct usb_xpad *xpad)
 				 retval);
 	}
 
+
 	spin_lock_irqsave(&xpad->odata_lock, flags);
 
 	/*
@@ -1741,6 +1753,26 @@ static int xpad_start_xbox_360(struct usb_xpad *xpad)
 err_free_ctrl_data:
 	kfree(data);
 	return status;
+}
+
+static void xpadone_ack_identify_report(struct usb_xpad *xpad, u8 seq_num)
+{
+	unsigned long flags;
+	struct xpad_output_packet *packet =
+			&xpad->out_packets[XPAD_OUT_CMD_IDX];
+	static const u8 identify_ack[] = {
+		GIP_CMD_ACK, GIP_OPT_INTERNAL, GIP_SEQ0, GIP_PL_LEN(9),
+		0x00, GIP_CMD_IDENTIFY, GIP_OPT_INTERNAL, 0x3a, 0x00, 0x00, 0x00, 0x80, 0x00
+	};
+
+	spin_lock_irqsave(&xpad->odata_lock, flags);
+	packet->len = sizeof(identify_ack);
+	memcpy(packet->data, identify_ack, packet->len);
+	packet->data[2] = seq_num;
+	packet->pending = true;
+	xpad->last_out_packet = -1;
+	xpad_try_sending_next_out_packet(xpad);
+	spin_unlock_irqrestore(&xpad->odata_lock, flags);
 }
 
 static void xpadone_ack_mode_report(struct usb_xpad *xpad, u8 seq_num)
