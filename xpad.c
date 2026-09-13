@@ -89,7 +89,8 @@
 #define ABS_PROFILE ABS_MISC
 #endif
 
-#define XPAD_PKT_LEN 64
+#define XPAD_PKT_LEN		64 /* Max DMA buffer size (Xbox One) */
+#define XPAD_PKT_LEN_360	32 /* Xbox 360 and classic Xbox packet length */
 
 /* The Guitar Hero Live (GHL) Xbox One dongles require a poke 
  * every 8 seconds.
@@ -592,6 +593,7 @@ static const struct usb_device_id xpad_table[] = {
 	XPAD_XBOX360_VENDOR(0x31e3),		/* Wooting Keyboards */
 	XPAD_XBOX360_VENDOR(0x3285),		/* Nacon GC-100 */
 	XPAD_XBOXONE_VENDOR(0x3285),		/* Nacon Evol-X */
+	XPAD_XBOX360_VENDOR(0x3434),		/* Keychron Gamepad Emulation */
 	XPAD_XBOX360_VENDOR(0x3537),		/* GameSir Controllers */
 	XPAD_XBOXONE_VENDOR(0x3537),		/* GameSir Controllers */
 	XPAD_XBOX360_VENDOR(0x413d),		/* Black Shark Green Ghost Controller */
@@ -2417,9 +2419,11 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	if (error)
 		goto err_free_in_urb;
 
+	int in_len = (xpad->xtype == XTYPE_XBOXONE) ? XPAD_PKT_LEN : XPAD_PKT_LEN_360;
+
 	usb_fill_int_urb(xpad->irq_in, udev,
 			 usb_rcvintpipe(udev, ep_irq_in->bEndpointAddress),
-			 xpad->idata, XPAD_PKT_LEN, xpad_irq_in,
+			 xpad->idata, in_len, xpad_irq_in,
 			 xpad, ep_irq_in->bInterval);
 	xpad->irq_in->transfer_dma = xpad->idata_dma;
 	xpad->irq_in->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
