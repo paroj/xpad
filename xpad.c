@@ -150,6 +150,10 @@ static bool auto_poweroff = true;
 module_param(auto_poweroff, bool, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(auto_poweroff, "Power off wireless controllers on suspend");
 
+static bool always_poll;
+module_param(always_poll, bool, 0444);
+MODULE_PARM_DESC(always_poll, "Always poll interrupt IN endpoint even when no application has opened the device");
+
 static const struct xpad_device {
 	u16 idVendor;
 	u16 idProduct;
@@ -821,6 +825,7 @@ struct usb_xpad {
 	time64_t mode_btn_down_ts;
 	struct urb *ghl_urb;		/* URB for GHL Xbox One magic data */
 	struct timer_list ghl_poke_timer;	/* Timer for periodic poke of GHL magic data */
+	bool always_poll;		/* keep polling active without open apps */
 };
 
 static int xpad_init_input(struct usb_xpad *xpad);
@@ -2143,12 +2148,18 @@ static int xpad_open(struct input_dev *dev)
 {
 	struct usb_xpad *xpad = input_get_drvdata(dev);
 
+	if (xpad->always_poll)
+		return 0;
+
 	return xpad_start_input(xpad);
 }
 
 static void xpad_close(struct input_dev *dev)
 {
 	struct usb_xpad *xpad = input_get_drvdata(dev);
+
+	if (xpad->always_poll)
+		return;
 
 	xpad_stop_input(xpad);
 }
@@ -2363,6 +2374,14 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	xpad->packet_type = PKT_XB;
 	INIT_WORK(&xpad->work, xpad_presence_work);
 
+	if (always_poll ||
+	    (le16_to_cpu(udev->descriptor.idVendor) == 0x045e &&
+	     le16_to_cpu(udev->descriptor.idProduct) == 0x028e &&
+	     udev->manufacturer && strstr(udev->manufacturer, "ZhiXu"))) {
+		xpad->always_poll = true;
+		dev_info(&intf->dev, "Enabling persistent polling quirk for ZhiXu / Fantech controller\n");
+	}
+
 	if (xpad->xtype == XTYPE_UNKNOWN) {
 		if (intf->cur_altsetting->desc.bInterfaceClass == USB_CLASS_VENDOR_SPEC) {
 			if (intf->cur_altsetting->desc.bInterfaceProtocol == 129)
@@ -2481,6 +2500,13 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 		error = xpad_init_input(xpad);
 		if (error)
 			goto err_deinit_output;
+
+		if (xpad->always_poll) {
+			error = xpad_start_input(xpad);
+			if (error)
+				goto err_deinit_output;
+			udev->quirks |= USB_QUIRK_RESET_RESUME;
+		}
 	}
 
 	if (xpad->quirks & QUIRK_GHL_XBOXONE) {
@@ -2514,7 +2540,7 @@ static void xpad_disconnect(struct usb_interface *intf)
 {
 	struct usb_xpad *xpad = usb_get_intfdata(intf);
 
-	if (xpad->xtype == XTYPE_XBOX360W)
+	if (xpad->xtype == XTYPE_XBOX360W || xpad->always_poll)
 		xpad360w_stop_input(xpad);
 
 	xpad_deinit_input(xpad);
@@ -2565,7 +2591,7 @@ static int xpad_suspend(struct usb_interface *intf, pm_message_t message)
 			xpad360w_poweroff_controller(xpad);
 	} else {
 		mutex_lock(&input->mutex);
-		if (input->users)
+		if (input->users || xpad->always_poll)
 			xpad_stop_input(xpad);
 		mutex_unlock(&input->mutex);
 	}
@@ -2585,7 +2611,7 @@ static int xpad_resume(struct usb_interface *intf)
 		retval = xpad360w_start_input(xpad);
 	} else {
 		mutex_lock(&input->mutex);
-		if (input->users) {
+		if (input->users || xpad->always_poll) {
 			retval = xpad_start_input(xpad);
 		} else if (xpad->xtype == XTYPE_XBOXONE) {
 			/*
